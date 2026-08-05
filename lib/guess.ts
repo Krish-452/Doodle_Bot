@@ -36,12 +36,42 @@ export const INITIAL_GUESS_STATE: GuessState = {
  *     samples must be consecutive; a near-miss in between does not carry the streak.
  *   - Once `won` is true, return early and leave it true.
  */
+import { CONFIDENCE_THRESHOLD, REQUIRED_CONSECUTIVE_SAMPLES } from "./constants";
+
 export function evaluateGuess(
   predictions: Prediction[],
   target: Word,
   previous: GuessState,
 ): GuessState {
-  throw new Error(
-    `lib/guess.ts: evaluateGuess() not implemented (${predictions.length} predictions, target "${target.id}", streak ${previous.streak})`,
+  if (previous.won) {
+    return previous;
+  }
+
+  if (!predictions || predictions.length === 0) {
+    return previous;
+  }
+
+  const top = predictions[0];
+  const isTargetTop = target.labels.some(
+    (label) => label.toLowerCase() === top.label.toLowerCase(),
   );
+
+  const displayGuess = isTargetTop ? target.id : top.label;
+
+  if (isTargetTop && top.confidence >= CONFIDENCE_THRESHOLD) {
+    const nextStreak = previous.streak + 1;
+    const isWon = nextStreak >= REQUIRED_CONSECUTIVE_SAMPLES;
+    return {
+      topGuess: displayGuess,
+      streak: nextStreak,
+      won: isWon,
+    };
+  }
+
+  return {
+    topGuess: displayGuess,
+    streak: 0,
+    won: false,
+  };
 }
+
