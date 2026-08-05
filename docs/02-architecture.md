@@ -279,7 +279,7 @@ app/
   layout.tsx              Root layout — fonts, IEEE theme, viewport metadata
   page.tsx                Landing: branding, hook, name entry
   play/page.tsx           Game shell — client state machine
-  leaderboard/page.tsx    Stall display — landscape, auto-refreshing
+  leaderboard/page.tsx    Leaderboard — mobile board, auto-refreshing (landscape deferred)
 ```
 
 The whole round runs at `/play` as a **client-side state machine**, not as separate routes:

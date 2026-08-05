@@ -87,10 +87,28 @@ app/
   play/page.tsx           Game shell (client state machine)
   leaderboard/page.tsx    Stall display
 lib/
+  types.ts                Cross-stream contracts — editing this is a cross-team change
+  constants.ts            Every tunable game constant, in one place
   word-bank.ts            Static typed word list
   model.ts                TF.js singleton: load, warm, predict
-  supabase.ts             Client factory
+  guess.ts                Win detection. No TF.js import, so it is testable before the model exists
+  data.ts                 createParticipant / submitResult / fetchLeaderboard
+  supabase.ts             Client factory only — no data access
 ```
+
+### The three seams
+
+Streams build against these rather than against each other. Import the contract, not the
+implementation:
+
+| Seam | Surface | Lives in |
+| --- | --- | --- |
+| canvas → inference | `CanvasHandle` — `getSnapshot`, `consumeDirty`, `clear` | `lib/types.ts` |
+| inference → game | `evaluateGuess(predictions, target, previous)` | `lib/guess.ts` |
+| game → data | `createParticipant`, `submitResult`, `fetchLeaderboard` | `lib/data.ts` |
+
+`submitResult` resolves once the result is written **or queued** — it does not reject on network
+failure, and callers must not add their own retry.
 
 ---
 
