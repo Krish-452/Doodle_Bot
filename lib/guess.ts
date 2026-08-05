@@ -1,0 +1,47 @@
+import type { GuessState, Prediction, Word } from "./types";
+
+/**
+ * Win detection.
+ *
+ * Deliberately separate from lib/model.ts and deliberately free of any TF.js import: it takes
+ * predictions as plain data rather than a model, so the game stream can build and unit-test
+ * against it today, before the model is chosen and before @tensorflow/tfjs is even installed.
+ *
+ * The rule (docs/02-architecture.md § 4): one of the target's labels is top-1 at or above
+ * CONFIDENCE_THRESHOLD, sustained for REQUIRED_CONSECUTIVE_SAMPLES consecutive samples.
+ *
+ * The second half is load-bearing. Confidence spikes mid-stroke are common — a half-drawn cat
+ * momentarily reads as a very confident something-else — and without the streak requirement
+ * those produce wins that feel unearned and random to the player.
+ */
+
+export const INITIAL_GUESS_STATE: GuessState = {
+  topGuess: null,
+  streak: 0,
+  won: false,
+};
+
+/**
+ * Folds one sample's predictions into the running guess state.
+ *
+ * Pure: same inputs, same output, no side effects. D calls it once per sample and stores the
+ * result, passing it back as `previous` on the next sample.
+ *
+ * Implementation notes for whoever fills this in:
+ *   - Match against `target.labels`, not `target.id`. Some words accept several model classes
+ *     ("couch" / "sofa"), and any of them counts.
+ *   - `topGuess` should be the display label when the top prediction matches the target, and
+ *     the raw model class otherwise — it is shown to the player as "AI thinks: ___".
+ *   - Reset `streak` to 0 on any sample where the target is not top-1 above threshold. The
+ *     samples must be consecutive; a near-miss in between does not carry the streak.
+ *   - Once `won` is true, return early and leave it true.
+ */
+export function evaluateGuess(
+  predictions: Prediction[],
+  target: Word,
+  previous: GuessState,
+): GuessState {
+  throw new Error(
+    `lib/guess.ts: evaluateGuess() not implemented (${predictions.length} predictions, target "${target.id}", streak ${previous.streak})`,
+  );
+}
