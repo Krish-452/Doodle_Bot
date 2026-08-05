@@ -9,13 +9,14 @@ import { DrawingCanvas } from "../../components/DrawingCanvas";
 import { GuessStrip } from "../../components/GuessStrip";
 import { ResultScreen } from "../../components/ResultScreen";
 import { pickThreeWords } from "../../lib/word-bank";
-import { loadModel, predict, isModelReady } from "../../lib/model";
-import { evaluateGuess, INITIAL_GUESS_STATE } from "../../lib/guess";
+import { loadModel } from "../../lib/model";
+import { INITIAL_GUESS_STATE } from "../../lib/guess";
 import { submitResult } from "../../lib/data";
+import { useRoundTimer } from "../../hooks/useRoundTimer";
+import { useSampleLoop } from "../../hooks/useSampleLoop";
 import type { CanvasHandle, GuessState, Word } from "../../lib/types";
 import {
   ROUND_SECONDS,
-  SAMPLE_INTERVAL_MS,
   SESSION_STORAGE_KEY,
 } from "../../lib/constants";
 
@@ -32,8 +33,7 @@ export default function PlayPage() {
   const [wordChoices, setWordChoices] = useState<Word[]>([]);
   const [selectedWord, setSelectedWord] = useState<Word | null>(null);
 
-  // Game & Timer state
-  const [timeLeft, setTimeLeft] = useState<number>(ROUND_SECONDS);
+  // Game state
   const [guessState, setGuessState] = useState<GuessState>(INITIAL_GUESS_STATE);
   const [topConfidence, setTopConfidence] = useState<number | undefined>(undefined);
   const [isModelLoading, setIsModelLoading] = useState<boolean>(true);
@@ -42,7 +42,6 @@ export default function PlayPage() {
   const canvasRef = useRef<CanvasHandle | null>(null);
   const roundStartTimeRef = useRef<number | null>(null);
   const guessStateRef = useRef<GuessState>(INITIAL_GUESS_STATE);
-  const isEvaluatingRef = useRef<boolean>(false);
 
   // 1. Session check & Model loading on mount
   useEffect(() => {
@@ -66,13 +65,14 @@ export default function PlayPage() {
       return;
     }
 
-    // Load word choices
     setWordChoices(pickThreeWords());
 
-    // Preload model once. Clear the loading hint even on failure -- the sampling loop's own
-    // try/catch (below) already tolerates predict() throwing, so a failed load degrades to
-    // "no live guesses" rather than leaving the player stuck on a loading banner forever.
+    const loadStart = performance.now();
     loadModel()
+      .then(() => {
+        const duration = performance.now() - loadStart;
+        console.log(`[Telemetry] Model load completed in ${duration.toFixed(2)}ms`);
+      })
       .catch((err) => {
         console.error("Model failed to load:", err);
       })
@@ -87,25 +87,7 @@ export default function PlayPage() {
     setPhase("countdown");
   };
 
-  // 3. Countdown completed -> Start drawing phase
-  const handleCountdownComplete = () => {
-    setPhase("drawing");
-    setTimeLeft(ROUND_SECONDS);
-    setGuessState(INITIAL_GUESS_STATE);
-    guessStateRef.current = INITIAL_GUESS_STATE;
-    setTopConfidence(undefined);
-    roundStartTimeRef.current = Date.now();
-
-    // The canvas wrapper only becomes visible once the "drawing" phase class change
-    // above has painted. Calling clear() synchronously here races that paint: the
-    // canvas is still hidden (0x0), so it has nothing to size or clear. Deferring to
-    // the next frame guarantees the canvas is visible and measurable first.
-    requestAnimationFrame(() => {
-      canvasRef.current?.clear();
-    });
-  };
-
-  // 4. End round helper
+  // 3. End round helper
   const handleEndRound = useCallback(
     async (won: boolean) => {
       setPhase("result");
@@ -127,61 +109,50 @@ export default function PlayPage() {
     [session, selectedWord]
   );
 
-  // 5. Timer loop during drawing phase
-  useEffect(() => {
-    if (phase !== "drawing") return;
+  const handleTimeUp = useCallback(() => {
+    handleEndRound(false);
+  }, [handleEndRound]);
 
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          handleEndRound(false); // Time's up
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+  const handleWin = useCallback(() => {
+    handleEndRound(true);
+  }, [handleEndRound]);
 
-    return () => clearInterval(timer);
-  }, [phase, handleEndRound]);
+  // Hook for background-resilient round timer
+  const timeLeft = useRoundTimer({
+    durationSeconds: ROUND_SECONDS,
+    isActive: phase === "drawing",
+    onTimeUp: handleTimeUp,
+  });
 
-  // 6. Real-time AI Inference sampling loop
-  useEffect(() => {
-    if (phase !== "drawing" || !selectedWord) return;
+  const handleGuessUpdated = useCallback((nextState: GuessState, confidence?: number) => {
+    setGuessState(nextState);
+    setTopConfidence(confidence);
+  }, []);
 
-    const interval = setInterval(async () => {
-      if (isEvaluatingRef.current || !canvasRef.current) return;
-      
-      // Sample only when canvas is dirty
-      if (!canvasRef.current.consumeDirty()) return;
+  // Hook for background-resilient AI inference loop
+  useSampleLoop({
+    isActive: phase === "drawing",
+    selectedWord,
+    canvasRef,
+    guessStateRef,
+    onGuessUpdated: handleGuessUpdated,
+    onWin: handleWin,
+  });
 
-      isEvaluatingRef.current = true;
-      try {
-        const snapshot = canvasRef.current.getSnapshot();
-        if (snapshot) {
-          const predictions = await predict(snapshot);
-          if (predictions && predictions.length > 0) {
-            setTopConfidence(predictions[0].confidence);
-            const nextState = evaluateGuess(predictions, selectedWord, guessStateRef.current);
-            guessStateRef.current = nextState;
-            setGuessState(nextState);
+  // 4. Countdown completed -> Start drawing phase
+  const handleCountdownComplete = () => {
+    setPhase("drawing");
+    setGuessState(INITIAL_GUESS_STATE);
+    guessStateRef.current = INITIAL_GUESS_STATE;
+    setTopConfidence(undefined);
+    roundStartTimeRef.current = Date.now();
 
-            if (nextState.won) {
-              handleEndRound(true);
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Sampling error:", err);
-      } finally {
-        isEvaluatingRef.current = false;
-      }
-    }, SAMPLE_INTERVAL_MS);
+    requestAnimationFrame(() => {
+      canvasRef.current?.clear();
+    });
+  };
 
-    return () => clearInterval(interval);
-  }, [phase, selectedWord, handleEndRound]);
-
-  // 7. Play again -> reset to word selection
+  // 5. Play again -> reset to word selection
   const handlePlayAgain = () => {
     setWordChoices(pickThreeWords());
     setSelectedWord(null);
@@ -191,12 +162,12 @@ export default function PlayPage() {
   };
 
   if (!session) {
-    return null; // Redirecting
+    return null;
   }
 
   return (
     <ScreenShell showLogo={true}>
-      <div className="flex flex-1 flex-col h-[calc(100dvh-57px)] p-4 max-w-lg mx-auto w-full">
+      <div className="flex flex-1 flex-col h-[100dvh] min-h-[100dvh] p-4 max-w-lg mx-auto w-full">
         {/* Header Strip with player name & timer */}
         {phase === "drawing" && selectedWord && (
           <div className="flex items-center justify-between pb-3">
@@ -244,7 +215,7 @@ export default function PlayPage() {
           <CountdownOverlay word={selectedWord} onComplete={handleCountdownComplete} />
         )}
 
-        {/* State 3: Drawing Canvas & Live Guessing (Permanently mounted to preserve canvas DOM & model) */}
+        {/* State 3: Drawing Canvas & Live Guessing */}
         <div className={`flex-1 flex-col space-y-3 min-h-0 ${phase === "drawing" ? "flex" : "hidden"}`}>
           <GuessStrip
             topGuess={guessState.topGuess}
@@ -271,7 +242,6 @@ export default function PlayPage() {
             />
           </div>
         )}
-
       </div>
     </ScreenShell>
   );

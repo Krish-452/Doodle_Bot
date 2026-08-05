@@ -16,50 +16,12 @@ interface DrawingCanvasProps {
 
 export const DrawingCanvas = forwardRef<CanvasHandle, DrawingCanvasProps>(
   ({ disabled = false }, ref) => {
+    const containerRef = useRef<HTMLDivElement | null>(null);
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const isDrawingRef = useRef<boolean>(false);
     const isDirtyRef = useRef<boolean>(false);
     const strokeHistoryRef = useRef<ImageData[]>([]);
     const [canUndo, setCanUndo] = useState(false);
-
-    // Scaling for high DPI screens
-    const setupCanvas = useCallback(() => {
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-
-      const rect = canvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-
-      canvas.width = rect.width * dpr;
-      canvas.height = rect.height * dpr;
-
-      const ctx = canvas.getContext("2d");
-      if (ctx) {
-        ctx.scale(dpr, dpr);
-        ctx.lineCap = "round";
-        ctx.lineJoin = "round";
-        ctx.strokeStyle = "#0A0A0A"; // Black ink on white
-        ctx.lineWidth = 5;
-
-        // White background
-        ctx.fillStyle = "#FFFFFF";
-        ctx.fillRect(0, 0, rect.width, rect.height);
-      }
-    }, []);
-
-    useEffect(() => {
-      setupCanvas();
-
-      const handleResize = () => {
-        // Redraw content if resized
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        setupCanvas();
-      };
-
-      window.addEventListener("resize", handleResize);
-      return () => window.removeEventListener("resize", handleResize);
-    }, [setupCanvas]);
 
     // Save snapshot state for undo
     const saveState = useCallback(() => {
@@ -75,13 +37,79 @@ export const DrawingCanvas = forwardRef<CanvasHandle, DrawingCanvasProps>(
       setCanUndo(strokeHistoryRef.current.length > 1);
     }, []);
 
-    // Pointer events for mobile + desktop
+    // Scaling for high DPI screens & maintaining backing store contents across resizes
+    const setupCanvas = useCallback(() => {
+      const canvas = canvasRef.current;
+      const container = containerRef.current;
+      if (!canvas || !container) return;
+
+      const rect = container.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return;
+
+      const dpr = window.devicePixelRatio || 1;
+      const newWidth = Math.floor(rect.width * dpr);
+      const newHeight = Math.floor(rect.height * dpr);
+
+      if (canvas.width === newWidth && canvas.height === newHeight) return;
+
+      // Preserve previous drawing during resize / orientation change
+      let tempCanvas: HTMLCanvasElement | null = null;
+      if (canvas.width > 0 && canvas.height > 0) {
+        tempCanvas = document.createElement("canvas");
+        tempCanvas.width = canvas.width;
+        tempCanvas.height = canvas.height;
+        const tempCtx = tempCanvas.getContext("2d");
+        if (tempCtx) {
+          tempCtx.drawImage(canvas, 0, 0);
+        }
+      }
+
+      canvas.width = newWidth;
+      canvas.height = newHeight;
+
+      const ctx = canvas.getContext("2d");
+      if (ctx) {
+        ctx.scale(dpr, dpr);
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.strokeStyle = "#0A0A0A";
+        ctx.lineWidth = 5;
+
+        // White background
+        ctx.fillStyle = "#FFFFFF";
+        ctx.fillRect(0, 0, rect.width, rect.height);
+
+        // Restore saved content scaled to new dimensions if present
+        if (tempCanvas) {
+          ctx.drawImage(tempCanvas, 0, 0, rect.width, rect.height);
+        }
+      }
+    }, []);
+
+    useEffect(() => {
+      setupCanvas();
+
+      const container = containerRef.current;
+      if (!container) return;
+
+      const observer = new ResizeObserver(() => {
+        setupCanvas();
+      });
+
+      observer.observe(container);
+      return () => observer.disconnect();
+    }, [setupCanvas]);
+
+    // Pointer events with full touch neutralization
     const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
       if (disabled) return;
       const canvas = canvasRef.current;
       if (!canvas) return;
 
-      canvas.setPointerCapture(e.pointerId);
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch (_) {}
+
       isDrawingRef.current = true;
       isDirtyRef.current = true;
 
@@ -122,7 +150,9 @@ export const DrawingCanvas = forwardRef<CanvasHandle, DrawingCanvasProps>(
       const canvas = canvasRef.current;
       if (canvas) {
         try {
-          canvas.releasePointerCapture(e.pointerId);
+          if (canvas.hasPointerCapture(e.pointerId)) {
+            canvas.releasePointerCapture(e.pointerId);
+          }
         } catch (_) {}
       }
       isDrawingRef.current = false;
@@ -130,21 +160,17 @@ export const DrawingCanvas = forwardRef<CanvasHandle, DrawingCanvasProps>(
 
     const clearCanvas = useCallback(() => {
       const canvas = canvasRef.current;
-      if (!canvas) return;
+      const container = containerRef.current;
+      if (!canvas || !container) return;
 
-      const rect = canvas.getBoundingClientRect();
+      const rect = container.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
 
       if (rect.width > 0 && rect.height > 0) {
-        if (canvas.width !== rect.width * dpr || canvas.height !== rect.height * dpr) {
-          canvas.width = rect.width * dpr;
-          canvas.height = rect.height * dpr;
-        }
+        canvas.width = Math.floor(rect.width * dpr);
+        canvas.height = Math.floor(rect.height * dpr);
       }
 
-      // Canvas is still hidden (e.g. clear() fired before the "drawing" phase's CSS
-      // class change has painted) — nothing to size or snapshot yet. Bail out rather
-      // than call getImageData on a zero-size canvas, which throws IndexSizeError.
       if (canvas.width === 0 || canvas.height === 0) return;
 
       const ctx = canvas.getContext("2d");
@@ -165,16 +191,13 @@ export const DrawingCanvas = forwardRef<CanvasHandle, DrawingCanvasProps>(
       saveState();
     }, [saveState]);
 
-
     const handleUndo = () => {
       const canvas = canvasRef.current;
       if (!canvas || strokeHistoryRef.current.length <= 1) return;
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
-      // Pop current state
       strokeHistoryRef.current.pop();
-      // Restore previous state
       const prevState = strokeHistoryRef.current[strokeHistoryRef.current.length - 1];
       if (prevState) {
         ctx.putImageData(prevState, 0, 0);
@@ -183,7 +206,6 @@ export const DrawingCanvas = forwardRef<CanvasHandle, DrawingCanvasProps>(
       setCanUndo(strokeHistoryRef.current.length > 1);
     };
 
-    // Implement CanvasHandle ref interface for inference engine
     useImperativeHandle(ref, () => ({
       getSnapshot: () => {
         return canvasRef.current!;
@@ -198,10 +220,19 @@ export const DrawingCanvas = forwardRef<CanvasHandle, DrawingCanvasProps>(
 
     return (
       <div className="relative flex flex-1 flex-col w-full h-full">
-        <div className="relative flex-1 w-full rounded-2xl overflow-hidden border-2 border-ieee-blue/30 bg-white shadow-inner">
+        <div
+          ref={containerRef}
+          className="relative flex-1 w-full rounded-2xl overflow-hidden border-2 border-ieee-blue/30 bg-white shadow-inner"
+        >
           <canvas
             ref={canvasRef}
-            className="absolute inset-0 w-full h-full canvas-surface cursor-crosshair touch-none select-none"
+            className="absolute inset-0 w-full h-full cursor-crosshair touch-none select-none"
+            style={{
+              touchAction: "none",
+              WebkitTouchCallout: "none",
+              userSelect: "none",
+              WebkitUserSelect: "none",
+            }}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
