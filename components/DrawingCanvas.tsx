@@ -142,6 +142,11 @@ export const DrawingCanvas = forwardRef<CanvasHandle, DrawingCanvasProps>(
         }
       }
 
+      // Canvas is still hidden (e.g. clear() fired before the "drawing" phase's CSS
+      // class change has painted) — nothing to size or snapshot yet. Bail out rather
+      // than call getImageData on a zero-size canvas, which throws IndexSizeError.
+      if (canvas.width === 0 || canvas.height === 0) return;
+
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
@@ -196,7 +201,7 @@ export const DrawingCanvas = forwardRef<CanvasHandle, DrawingCanvasProps>(
         <div className="relative flex-1 w-full rounded-2xl overflow-hidden border-2 border-ieee-blue/30 bg-white shadow-inner">
           <canvas
             ref={canvasRef}
-            className="w-full h-full canvas-surface cursor-crosshair touch-none select-none"
+            className="absolute inset-0 w-full h-full canvas-surface cursor-crosshair touch-none select-none"
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
