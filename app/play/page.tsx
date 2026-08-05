@@ -69,10 +69,16 @@ export default function PlayPage() {
     // Load word choices
     setWordChoices(pickThreeWords());
 
-    // Preload model once
-    loadModel().then(() => {
-      setIsModelLoading(false);
-    });
+    // Preload model once. Clear the loading hint even on failure -- the sampling loop's own
+    // try/catch (below) already tolerates predict() throwing, so a failed load degrades to
+    // "no live guesses" rather than leaving the player stuck on a loading banner forever.
+    loadModel()
+      .catch((err) => {
+        console.error("Model failed to load:", err);
+      })
+      .finally(() => {
+        setIsModelLoading(false);
+      });
   }, [router]);
 
   // 2. Select Word action -> Go to countdown
