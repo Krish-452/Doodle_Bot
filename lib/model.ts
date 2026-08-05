@@ -5,6 +5,20 @@
  * handles reliably, is still open, and the word bank is derived from the answer. Add the
  * dependency in the same pass that fills these bodies in.
  *
+ * Model sourced and vendored for issue #3 (doodleNet, 345-class QuickDraw CNN — see
+ * https://github.com/yining1023/doodleNet). Validated preprocessing spec, confirmed against
+ * the vendored model.json and the reference demo's own preprocessing code:
+ *   - Input tensor: [1, 28, 28, 1], single grayscale channel.
+ *   - Canvas is drawn black ink on white background (this project's convention).
+ *   - Combined invert + normalize in one step: value = (255 - grayscale) / 255.
+ *     Ink pixels -> ~1.0, background -> ~0.0. Do NOT normalize to [0,1] first and invert
+ *     separately with a different formula — this exact formula is what the model saw in training.
+ *   - Class list + order: public/model/class_names.txt (345 labels, index i = output unit i).
+ *     Confirmed identical, in order, to the reference demo's own CLASSES array.
+ *   - Automated (non-hand-drawn) validation only got a rough signal — see issue #3's comment
+ *     for the caveat and the per-category table. Re-validate with real hand-drawn strokes
+ *     before trusting any specific category as reliable.
+ *
  * Rules that survive whichever model is chosen (docs/02-architecture.md § 4):
  *   - Load once, at app start. Never per round, never per component mount.
  *   - Warm with one dummy prediction on load; the first real inference is otherwise visibly slow.

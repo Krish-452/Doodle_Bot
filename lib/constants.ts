@@ -26,8 +26,8 @@ export const CONFIDENCE_THRESHOLD = 0.5;
  */
 export const REQUIRED_CONSECUTIVE_SAMPLES = 2;
 
-/** Model input is a square grayscale bitmap: [1, N, N, 1]. Confirm against the actual model
- *  before building around it — along with channel order and ink polarity. */
+/** Model input is a square grayscale bitmap: [1, N, N, 1]. Confirmed against the vendored
+ *  model (public/model/, see issue #3) — 28 is correct for this model, not a guess. */
 export const MODEL_INPUT_SIZE = 28;
 
 /**
