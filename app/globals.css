@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+/*
+ * Every design token lives in this one @theme block. Tailwind v4 is CSS-first — there is no
+ * tailwind.config.js, and declaring --color-ieee-blue is what generates bg-ieee-blue,
+ * text-ieee-blue, border-ieee-blue and the rest.
+ *
+ * The IEEE hexes are UNVERIFIED. #00629b is the widely-used primary; the supporting palette
+ * is a working approximation and brand compliance is a committee-review criterion. Correcting
+ * them should mean editing this block and nothing else, so never hardcode a brand hex in a
+ * component. See docs/03-design-system.md § 2.
+ */
+@theme {
+  /* Brand */
+  --color-ieee-blue: #00629b;
+  --color-ieee-blue-dark: #00416a;
+  --color-ieee-blue-light: #4a91bf;
+  --color-ieee-cyan: #00b5e2;
+
+  /* Surfaces */
+  --color-surface: #ffffff;
+  --color-surface-muted: #f4f6f8;
+  --color-ink: #0a0a0a;
+  --color-ink-muted: #5b6670;
+
+  /* Semantic. Never carry outcome on colour alone — always pair with text and iconography. */
+  --color-win: #1a7f5a;
+  --color-timeout: #b4531f;
+  --color-urgent: #c0392b;
+
+  /* Type */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  /* Stall-display scale — leaderboard only. The landscape layout is deferred; the tokens stay
+     so it can be picked up without re-deriving the scale. */
+  --text-stall-hero: 7rem;
+  --text-stall-hero--line-height: 0.95;
+  --text-stall-row: 2.25rem;
+}
+
+/* Stops pull-to-refresh from firing mid-stroke. */
+html,
+body {
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+/*
+ * Goes on the drawing canvas element. Registered as a real utility rather than a pile of
+ * arbitrary values: touch-action stops the page panning under the stroke, and the callout /
+ * select rules stop iOS opening a long-press menu. See docs/03-design-system.md § 6.
+ */
+@utility canvas-surface {
+  touch-action: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}

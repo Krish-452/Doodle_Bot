@@ -1,0 +1,2 @@
+# The TF.js model (model.json + shard bins) is served from this directory, on our own origin,
+# so it is CDN-cached and not a third-party dependency at stall time. Hour-0 task.

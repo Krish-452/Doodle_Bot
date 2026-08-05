@@ -170,7 +170,7 @@ These are genuinely undecided. Raise them rather than picking a default and movi
 | **Round timer: 90s or 120s** | Ship it configurable, decide after playtesting |
 | **Ranking formula weights** | Starting point is `W_A = 100, W_B = 1`. Keep them as named constants in one place |
 | **Does the leaderboard reset daily or run cumulatively?** | Changes the leaderboard query and the post-event export |
-| **Is there a dedicated stall screen?** | Determines whether the landscape leaderboard layout is required or dead code |
+| **Is there a dedicated stall screen?** | The landscape leaderboard layout is **deferred** — only the mobile board ships. Confirming a screen exists is what reopens it |
 | **Deployment host and IEEE subdomain** | HTTPS is required — QR flows expect secure origins |
 
 ---

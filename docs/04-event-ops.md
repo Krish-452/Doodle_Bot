@@ -19,7 +19,11 @@ aligned on execution.
 
 - **QR code posters at high-traffic points around the venue** — entrances, adjacent stalls, the
   main walkway. Not just at the IEEE stall itself. The point is to pull people in from a distance.
-- **One dedicated screen/monitor at the stall** running `/leaderboard` continuously, in landscape.
+- **A screen/monitor at the stall** running `/leaderboard` continuously, if one is available.
+  ⚠️ The dedicated landscape layout was deferred when the team dropped to four — what ships is
+  the mobile board. It will display on a monitor, but it is a portrait layout on a landscape
+  screen and will not fill it. If a screen is confirmed early enough to reopen the landscape
+  work, say so before Day 2 afternoon.
 - **Stable internet at the stall.** Confirm venue Wi-Fi capability in advance; carry a mobile
   hotspot as backup.
 - **Signage at the stall** reinforcing "Scan. Draw. Beat the AI." alongside the QR code, for people
@@ -81,7 +85,7 @@ Adapted for the 2-day build. Items the original 4-week plan assumed are marked w
 - [ ] Printed QR tested by scanning from ~1.5m with a real phone
 - [ ] Backup internet (hotspot) arranged
 - [ ] Stall display screen and mount/stand arranged
-- [ ] Leaderboard tested on the **actual** stall screen at its real resolution
+- [ ] Leaderboard tested on the **actual** stall screen, if one exists, at its real resolution
 - [ ] Volunteer shifts assigned and briefed
 - [ ] Supabase RLS policies verified — anon can insert results and read the leaderboard, and
       nothing else

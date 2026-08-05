@@ -107,7 +107,18 @@ Fits in one viewport at `100dvh`. If it scrolls on a small phone, it's wrong.
 - Time taken (if correct) and current leaderboard rank, shown clearly.
 - Two clear actions: **Play Again** (primary) and **View Leaderboard** (secondary).
 
-### 3.6 Leaderboard (stall display)
+### 3.6 Leaderboard
+
+> **The landscape stall layout below is deferred.** When the team dropped from five to four,
+> it was cut in favour of shipping the mobile board only. It serves a dedicated stall screen
+> whose existence is still an open question, so building it blind was the least defensible use
+> of a tighter budget. Reopen it only once a screen is confirmed, its resolution is known, and
+> the mobile board is working. The `--text-stall-*` tokens stay in the theme meanwhile.
+
+**Mobile board (ships):** portrait, headline stats at top, ranked list below, reachable from the
+results screen. Auto-refreshing, readable at arm's length.
+
+**Landscape stall layout (deferred):**
 
 - Designed for a larger screen viewed from a short distance — **not** a stretched mobile view.
 - Top section: headline stats (fastest overall guess, most games played) as large, glanceable

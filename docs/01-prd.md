@@ -168,7 +168,8 @@ Client-side inference is what makes the performance and latency targets achievab
 | High concurrency slowing predictions | Client-side inference removes the server from the prediction loop entirely |
 | Inappropriate names entered by participants | Basic client-side filtering; volunteers can moderate the leaderboard |
 | Device/browser fragmentation | Test on iOS Safari and Android Chrome explicitly before the event |
-| **Model sourcing overruns the 2-day budget** | Treat model validation as hour-0 work. If no usable pre-trained model is working by end of Day 1 morning, cut to a smaller word bank matched to whatever classes do work |
+| **No ML specialist on the team** | The team of four has no one strong on TF.js. Model work is timeboxed with a hard go/no-go at Day 1 midday, and the fallback is pre-planned rather than improvised — see below |
+| **Model sourcing overruns the 2-day budget** | Treat model validation as hour-0 work. If nothing usable is running by Day 1 midday, switch to training a small CNN on Quick, Draw! bitmaps over 15–20 self-chosen classes. Slower to start, but bounded and predictable, and it makes the word bank a decision rather than a discovered constraint |
 
 ---
 
@@ -211,7 +212,10 @@ These are unresolved. Do not silently pick an answer — raise them.
   which classes the chosen model handles reliably. Finalize after model validation.
 - **Round timer: 90s or 120s?** Decide after playtesting. Ship with it configurable.
 - **Does the leaderboard reset per day or run cumulatively across the full carnival?**
-- **Physical setup: is there a dedicated screen for the leaderboard, or is it phone-only?** This
-  determines whether the landscape stall layout is required or dead code.
+- **Physical setup: is there a dedicated screen for the leaderboard, or is it phone-only?**
+  Unresolved, and now consequential: with the team at four, the landscape stall layout is
+  **deferred** and only the mobile board ships. Confirming a screen exists is what reopens it.
+  If there is no screen, the QR posters are doing all the work of drawing a crowd, and their
+  placement matters more — tell whoever owns event ops.
 - **Exact ranking formula weights.** See
   [Architecture § ranking logic](02-architecture.md#8-ranking-logic).
