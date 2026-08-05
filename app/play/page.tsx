@@ -90,9 +90,13 @@ export default function PlayPage() {
     setTopConfidence(undefined);
     roundStartTimeRef.current = Date.now();
 
-    if (canvasRef.current) {
-      canvasRef.current.clear();
-    }
+    // The canvas wrapper only becomes visible once the "drawing" phase class change
+    // above has painted. Calling clear() synchronously here races that paint: the
+    // canvas is still hidden (0x0), so it has nothing to size or clear. Deferring to
+    // the next frame guarantees the canvas is visible and measurable first.
+    requestAnimationFrame(() => {
+      canvasRef.current?.clear();
+    });
   };
 
   // 4. End round helper
