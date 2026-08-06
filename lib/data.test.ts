@@ -2,9 +2,14 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { RESULT_QUEUE_STORAGE_KEY } from "./constants";
 
 /**
- * Exercises Issue #12's offline retry queue without a live Supabase project: submitResult
- * enqueues on a network failure, flushes on the next successful submit and on the window
- * "online" event, and an overlapping double flush does not double-submit a queued round.
+ * Exercises two things without a live Supabase project:
+ *
+ *  - Issue #12's offline retry queue: submitResult enqueues on a network failure, flushes on the
+ *    next successful submit and on the window "online" event, and an overlapping double flush
+ *    does not double-submit a queued round.
+ *  - Issue #14's empty-vs-unreachable fix: fetchLeaderboard trusts a real zero-row remote
+ *    response instead of silently falling back to local data, and still falls back when the
+ *    remote query actually fails.
  *
  * No jsdom, no vitest.config.ts — lib/data.ts only touches `window`/`localStorage` through the
  * bare global identifiers (never `document` or any other DOM API), so two minimal stubs are
@@ -19,16 +24,20 @@ const mockState = vi.hoisted(() => ({
   insertCalls: [] as unknown[],
   /** What the next (and subsequent, until changed) mocked insert() call resolves to. */
   nextResult: { error: null as { message: string } | null, status: 201 },
+  /** What the next mocked leaderboard_view select() call resolves to. */
+  nextSelectResult: { data: null as unknown[] | null, error: null as { message: string } | null },
 }));
 
 vi.mock("./supabase", () => ({
   getSupabaseClient: () => ({
-    // Table name isn't needed — attemptInsert only ever calls .from("game_results").
+    // Table name isn't needed — this mock's insert() is only ever called on game_results and
+    // its select() only ever on leaderboard_view (see attemptInsert / fetchLeaderboard).
     from: () => ({
       insert: async (payload: unknown) => {
         mockState.insertCalls.push(payload);
         return { error: mockState.nextResult.error, status: mockState.nextResult.status };
       },
+      select: async () => mockState.nextSelectResult,
     }),
   }),
 }));
@@ -56,9 +65,10 @@ const windowStub = new EventTarget();
 (globalThis as Record<string, unknown>).window = windowStub;
 
 let submitResult: typeof import("./data").submitResult;
+let fetchLeaderboard: typeof import("./data").fetchLeaderboard;
 
 beforeAll(async () => {
-  ({ submitResult } = await import("./data"));
+  ({ submitResult, fetchLeaderboard } = await import("./data"));
 });
 
 function readQueueLength(): number {
@@ -85,6 +95,7 @@ beforeEach(() => {
   memoryStorage.clear();
   mockState.insertCalls.length = 0;
   mockState.nextResult = { error: null, status: 201 };
+  mockState.nextSelectResult = { data: null, error: null };
 });
 
 describe("submitResult offline queue (Issue #12)", () => {
@@ -161,5 +172,30 @@ describe("submitResult offline queue (Issue #12)", () => {
     // Exactly one insert per queued item — never 3 or 4.
     expect(mockState.insertCalls).toHaveLength(2);
     expect(readQueueLength()).toBe(0);
+  });
+});
+
+describe("fetchLeaderboard: empty vs unreachable (Issue #14)", () => {
+  it("returns a real empty board when the remote query succeeds with zero rows, not the local fallback", async () => {
+    // Populate local data first (submitResult always writes locally, regardless of the mocked
+    // remote outcome), so a wrongful fallback to it would be detectable below.
+    await submitResult(sampleResult);
+
+    mockState.nextSelectResult = { data: [], error: null };
+    const rows = await fetchLeaderboard();
+
+    // Before the fix, `data.length > 0` being false sent this straight to
+    // computeLocalLeaderboard(), which would have returned the row seeded above instead of [].
+    expect(rows).toEqual([]);
+  });
+
+  it("falls back to local data when the remote query actually fails", async () => {
+    await submitResult(sampleResult); // seeds local data
+
+    mockState.nextSelectResult = { data: null, error: { message: "relation does not exist" } };
+    const rows = await fetchLeaderboard();
+
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows[0].participantId).toBe(sampleResult.participantId);
   });
 });

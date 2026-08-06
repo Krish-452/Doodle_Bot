@@ -498,7 +498,14 @@ export async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
       // Logged, not swallowed — a silent fallback to local data is what hid the shape
       // mismatch here in the first place.
       console.warn("leaderboard_view query failed, using local leaderboard:", error.message);
-    } else if (data && data.length > 0) {
+    } else if (data) {
+      // Trust a successful query regardless of row count (Issue #14). Previously this required
+      // `data.length > 0`, so a genuinely empty remote board fell through to
+      // computeLocalLeaderboard() — indistinguishable, on screen, from "the query failed" or
+      // "the project isn't configured". That's the worst failure mode at a stall: a
+      // misconfigured or freshly-reset project renders what looks like a working board, showing
+      // only the one phone's own history, and nobody watching it can tell. A real zero-row
+      // response now returns [] and the actual empty state renders.
       const validRows = data.filter(isLeaderboardViewRow);
       if (validRows.length < data.length) {
         // Not thrown — one malformed row shouldn't take down the whole board — but loud,
@@ -518,6 +525,10 @@ export async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
       // The view has no rank column and a bare select has no ordering guarantee, so rank is
       // assigned here using the same comparator as the offline path.
       return sortAndRank(rows);
+    } else {
+      // No error, but no data either — PostgREST shouldn't produce this on a successful select,
+      // but fall back rather than trust an absent response.
+      console.warn("leaderboard_view query returned no data and no error — using local leaderboard.");
     }
   } catch (err) {
     console.warn("Supabase unreachable, using local leaderboard:", err);

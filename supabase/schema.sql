@@ -109,6 +109,14 @@ alter table game_results enable row level security;
 -- anon may INSERT into both tables (gameplay requires it) and may NOT SELECT raw rows from
 -- either (no scraping the name list or the per-round history). No select policy is created on
 -- purpose — the absence of a policy is what denies the read.
+--
+-- Consequence for Realtime (Issue #14): Supabase's `postgres_changes` enforces RLS on the
+-- subscribing role. LeaderboardClient.tsx subscribes to anon `INSERT` events on game_results,
+-- but anon has no SELECT policy on that table — so under these policies, that subscription can
+-- never actually deliver an event. This is intentional: the RLS boundary is non-negotiable, and
+-- the leaderboard's 10s poll (also required by #14) is what actually keeps the board live. Do
+-- not add a SELECT policy on game_results to make the socket fire; that would defeat the point
+-- of this section.
 
 drop policy if exists participants_anon_insert on participants;
 create policy participants_anon_insert

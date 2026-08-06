@@ -164,7 +164,12 @@ export function LeaderboardClient({ initialLeaderboard }: LeaderboardClientProps
                     <div className="text-right">
                       <span className="font-black text-lg text-ieee-blue block">{row.score} pts</span>
                       <span className="text-xs font-semibold text-ink-muted">
-                        {row.bestTimeSeconds ? `Best: ${row.bestTimeSeconds.toFixed(1)}s` : "No wins yet"}
+                        {/* Truthiness would treat an exact 0.0s best time as "No wins yet" — compare
+                            against null explicitly. The offline path can't produce 0 (clamped to a
+                            0.5s minimum in app/play/page.tsx), but remote data isn't clamped. */}
+                        {row.bestTimeSeconds !== null
+                          ? `Best: ${row.bestTimeSeconds.toFixed(1)}s`
+                          : "No wins yet"}
                       </span>
                     </div>
                   </div>
