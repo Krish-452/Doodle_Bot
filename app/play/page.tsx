@@ -52,14 +52,13 @@ export default function PlayPage() {
 
     try {
       const parsed = JSON.parse(raw);
-      if (!parsed.participantId || !parsed.name) {
+      if (parsed.participantId && parsed.name) {
+        setSession(parsed);
+      } else {
         router.replace("/");
-        return;
       }
-      setSession(parsed);
-    } catch (_) {
+    } catch {
       router.replace("/");
-      return;
     }
 
     // Load word choices
@@ -82,6 +81,8 @@ export default function PlayPage() {
     setPhase("countdown");
   };
 
+  const [finalTimeSeconds, setFinalTimeSeconds] = useState<number | null>(null);
+
   // 3. End round helper
   const handleEndRound = useCallback(
     async (won: boolean) => {
@@ -91,6 +92,7 @@ export default function PlayPage() {
         ? Date.now() - roundStartTimeRef.current
         : 0;
       const elapsedSec = won ? Math.max(0.5, Number((elapsedMs / 1000).toFixed(1))) : null;
+      setFinalTimeSeconds(elapsedSec);
 
       if (session && selectedWord) {
         await submitResult({
@@ -159,10 +161,10 @@ export default function PlayPage() {
 
   return (
     <ScreenShell showLogo={true}>
-      <div className="flex flex-1 flex-col h-[calc(100dvh-57px)] p-4 max-w-lg mx-auto w-full">
-        {/* Header Strip with player name & timer */}
+      <div className="flex flex-1 flex-col h-[calc(100dvh-57px)] p-4 max-w-lg lg:max-w-6xl mx-auto w-full">
+        {/* Header Strip with target word & timer (Mobile portrait only) */}
         {phase === "drawing" && selectedWord && (
-          <div className="flex items-center justify-between pb-3">
+          <div className="flex lg:hidden items-center justify-between pb-3">
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-ink-muted">Target:</span>
               <span className="text-lg font-extrabold capitalize text-ieee-blue">
@@ -192,7 +194,7 @@ export default function PlayPage() {
 
         {/* State 1: Word Selection */}
         {phase === "word-select" && (
-          <div className="flex-1 flex flex-col justify-center">
+          <div className="flex-1 flex flex-col justify-center max-w-md lg:max-w-xl mx-auto w-full">
             {isModelLoading && (
               <div className="text-center py-2 text-xs font-semibold text-ieee-blue animate-pulse mb-2">
                 Loading AI Recognition Model...
@@ -212,26 +214,81 @@ export default function PlayPage() {
         )}
 
         {/* State 3: Drawing Canvas & Live Guessing */}
-        <div className={`flex-1 flex-col space-y-3 min-h-0 ${phase === "drawing" ? "flex" : "hidden"}`}>
-          <GuessStrip
-            topGuess={guessState.topGuess}
-            confidence={topConfidence}
-            streak={guessState.streak}
-          />
-          <DrawingCanvas ref={canvasRef} />
+        {/* Responsive Grid: Below lg: single column stacked. lg: 2-column layout (Canvas Left, Controls Right) */}
+        <div className={`flex-1 flex-col lg:flex-row lg:grid lg:grid-cols-12 lg:gap-8 min-h-0 ${phase === "drawing" ? "flex lg:grid" : "hidden"}`}>
+          
+          {/* Left Column (Desktop): Canvas Area (Col 1-7 or 1-8) */}
+          <div className="flex-1 flex flex-col min-h-0 lg:col-span-9 xl:col-span-10 h-full">
+            <DrawingCanvas ref={canvasRef} />
+          </div>
+
+          {/* Right Rail (Desktop): Word Prompt, Timer, Live Guess Strip (Col 8-12 or 9-12) */}
+          <div className="lg:col-span-3 xl:col-span-2 flex flex-col justify-between space-y-4 pt-3 lg:pt-0 bg-white/80 backdrop-blur-sm rounded-2xl border border-ieee-blue/20 shadow-lg">
+            {/* Desktop Target & Timer Panel */}
+            <div className="hidden lg:flex flex-col space-y-3 bg-white p-5 rounded-2xl border border-ieee-blue/20 shadow-xs">
+              <div className="flex items-center justify-between border-b border-surface-muted pb-3">
+                <span className="text-xs font-bold text-ink-muted uppercase tracking-wider">Your Target</span>
+                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-ieee-blue/10 text-ieee-blue border border-ieee-blue/20 uppercase">
+                  {selectedWord?.difficulty}
+                </span>
+              </div>
+              <div className="text-center py-1">
+                <span className="text-3xl font-black capitalize text-ieee-blue tracking-tight">
+                  {selectedWord?.id}
+                </span>
+              </div>
+              <div className="flex items-center justify-between pt-2 border-t border-surface-muted">
+                <span className="text-xs font-semibold text-ink-muted">Time Remaining</span>
+                <div
+                  className={`flex items-center gap-1.5 font-mono text-xl font-black px-3 py-1 rounded-lg border ${
+                    timeLeft <= 5
+                      ? "text-urgent border-urgent/30 bg-urgent/10"
+                      : "text-ink border-surface-muted bg-surface-muted"
+                  }`}
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <span>{timeLeft}s</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Live Guess Strip */}
+            <div className="w-full">
+              <GuessStrip
+                topGuess={guessState.topGuess}
+                confidence={topConfidence}
+                streak={guessState.streak}
+              />
+            </div>
+
+            {/* Desktop Brand / Volunteer note */}
+            <div className="hidden lg:block bg-ieee-blue/5 border border-ieee-blue/15 rounded-2xl p-4 text-xs text-ink-muted space-y-1">
+              <div className="flex items-center gap-1.5 font-bold text-ieee-blue">
+                <span>IEEE DoodleBot AI Engine</span>
+                <span className="text-ieee-cyan">•</span>
+                <span className="text-[10px] bg-white px-1.5 py-0.5 rounded border border-ieee-blue/20">Live</span>
+              </div>
+              <p>
+                Our real-time neural network crops your drawing area to a square tensor and evaluates top match probabilities continuously.
+              </p>
+            </div>
+          </div>
         </div>
 
         {/* State 4: Results */}
         {phase === "result" && selectedWord && (
-          <div className="flex-1 flex flex-col justify-center">
+          <div className="flex-1 flex flex-col justify-center max-w-md lg:max-w-xl mx-auto w-full">
             <ResultScreen
               won={guessState.won}
               word={selectedWord.id}
-              timeTakenSeconds={
-                guessState.won && roundStartTimeRef.current
-                  ? Math.max(0.5, Number(((Date.now() - roundStartTimeRef.current) / 1000).toFixed(1)))
-                  : null
-              }
+              timeTakenSeconds={finalTimeSeconds}
               participantId={session.participantId}
               participantName={session.name}
               onPlayAgain={handlePlayAgain}

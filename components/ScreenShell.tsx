@@ -13,21 +13,28 @@ export function ScreenShell({ children, showLogo = true, className = "" }: Scree
   return (
     <div className={`flex min-h-dvh flex-col bg-surface text-ink antialiased ${className}`}>
       {showLogo && (
-        <header className="flex items-center justify-between border-b border-surface-muted px-4 py-3 bg-white/80 backdrop-blur-sm sticky top-0 z-30">
-          <Link href="/" className="flex items-center gap-2">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-ieee-blue text-white font-bold text-sm shadow-sm">
-              IEEE
-            </div>
-            <div>
-              <span className="font-bold text-ieee-blue text-base leading-none block">DoodleBot</span>
-              <span className="text-[10px] text-ink-muted leading-none block">AU Student Branch</span>
+        <header className="flex items-center justify-between border-b border-surface-muted px-4 lg:px-8 py-3 bg-white/90 backdrop-blur-md sticky top-0 z-30 shadow-xs">
+          <Link href="/" className="flex items-center gap-3 group">
+            <img
+              src="/ieee-logo.svg"
+              alt="IEEE Logo"
+              className="h-8 w-auto object-contain transition-transform group-hover:scale-105"
+            />
+            <div className="flex flex-col">
+              <span className="font-extrabold text-ieee-blue text-base leading-none tracking-tight block group-hover:text-ieee-blue-dark transition-colors">
+                DoodleBot
+              </span>
+              <span className="text-[11px] font-semibold text-ink-muted leading-tight block mt-0.5">
+                IEEE Ahmedabad University <span className="text-ieee-cyan font-bold">•</span> Student Branch
+              </span>
             </div>
           </Link>
           <Link
             href="/leaderboard"
-            className="text-xs font-semibold text-ieee-blue hover:text-ieee-blue-dark transition-colors px-2 py-1 rounded-md hover:bg-surface-muted"
+            className="inline-flex items-center gap-1.5 text-xs font-bold text-ieee-blue hover:text-ieee-blue-dark transition-all px-3 py-1.5 rounded-lg bg-ieee-blue/5 hover:bg-ieee-blue/10 border border-ieee-blue/15 shadow-xs"
           >
-            Leaderboard 🏆
+            <span>Leaderboard</span>
+            <span className="text-sm">🏆</span>
           </Link>
         </header>
       )}

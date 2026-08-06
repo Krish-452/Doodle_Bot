@@ -39,7 +39,7 @@ export function CountdownOverlay({ word, onComplete }: CountdownOverlayProps) {
         </p>
 
         <h2 className="text-4xl font-extrabold capitalize text-white tracking-wide">
-          "{word.id}"
+          &quot;{word.id}&quot;
         </h2>
 
         <div className="flex items-center justify-center h-40">

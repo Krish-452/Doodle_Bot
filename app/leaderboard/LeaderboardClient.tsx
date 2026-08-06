@@ -69,18 +69,19 @@ export function LeaderboardClient({ initialLeaderboard }: LeaderboardClientProps
 
   return (
     <ScreenShell showLogo={true}>
-      <div className="flex flex-1 flex-col max-w-2xl mx-auto w-full p-4 space-y-6">
+      <div className="flex flex-1 flex-col max-w-2xl lg:max-w-4xl mx-auto w-full p-4 lg:p-8 space-y-6">
         {/* Title Header */}
         <div className="flex items-center justify-between pt-2">
           <div>
             <h1 className="text-3xl font-black text-ink tracking-tight flex items-center gap-2">
-              Leaderboard 🏆
+              <span>Leaderboard</span>
+              <span>🏆</span>
             </h1>
-            <p className="text-xs text-ink-muted">IEEE Club Carnival Live Rankings</p>
+            <p className="text-xs font-semibold text-ink-muted">IEEE Ahmedabad University Student Branch • Live Standings</p>
           </div>
           <Link
             href="/play"
-            className="inline-flex items-center justify-center px-4 py-2 text-sm font-bold text-white bg-ieee-blue hover:bg-ieee-blue-dark rounded-xl shadow-sm transition-all active:scale-95"
+            className="inline-flex items-center justify-center px-4 py-2 text-sm font-bold text-white bg-ieee-blue hover:bg-ieee-blue-dark rounded-xl shadow-sm transition-all active:scale-95 border border-ieee-blue/20"
           >
             Play Now 🎨
           </Link>

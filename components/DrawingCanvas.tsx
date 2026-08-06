@@ -135,7 +135,7 @@ export const DrawingCanvas = forwardRef<CanvasHandle, DrawingCanvasProps>(
 
       try {
         canvas.setPointerCapture(e.pointerId);
-      } catch (_) {}
+      } catch {}
 
       isDrawingRef.current = true;
       isDirtyRef.current = true;
@@ -178,7 +178,7 @@ export const DrawingCanvas = forwardRef<CanvasHandle, DrawingCanvasProps>(
       if (canvas) {
         try {
           canvas.releasePointerCapture(e.pointerId);
-        } catch (_) {}
+        } catch {}
       }
       isDrawingRef.current = false;
     };
