@@ -9,7 +9,7 @@ import { DrawingCanvas } from "../../components/DrawingCanvas";
 import { GuessStrip } from "../../components/GuessStrip";
 import { ResultScreen } from "../../components/ResultScreen";
 import { pickThreeWords } from "../../lib/word-bank";
-import { loadModel, predict, isModelReady } from "../../lib/model";
+import { loadModel, predict } from "../../lib/model";
 import { evaluateGuess, INITIAL_GUESS_STATE } from "../../lib/guess";
 import { submitResult } from "../../lib/data";
 import type { CanvasHandle, GuessState, Word } from "../../lib/types";
