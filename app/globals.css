@@ -2,6 +2,13 @@
 @import "tailwindcss";
 
 /*
+ * Tailwind v4 auto-detects content by walking the project. .idea/ is IDE config, never a source
+ * of class names, and PyCharm keeps a lock on files in there — scanning it panics Turbopack.
+ * Belt-and-braces with the *~ rule in .gitignore.
+ */
+@source not "../.idea";
+
+/*
  * Every design token lives in this one @theme block. Tailwind v4 is CSS-first — there is no
  * tailwind.config.js, and declaring --color-ieee-blue is what generates bg-ieee-blue,
  * text-ieee-blue, border-ieee-blue and the rest.

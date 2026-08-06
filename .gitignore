@@ -24,6 +24,11 @@
 .DS_Store
 *.pem
 
+# editor backup/temp files. JetBrains writes .idea/workspace.xml~ and holds a lock on it;
+# Tailwind v4's content scanner walks everything not gitignored, so without this it reads a
+# locked file and Turbopack panics mid-build.
+*~
+
 # debug
 npm-debug.log*
 yarn-debug.log*
