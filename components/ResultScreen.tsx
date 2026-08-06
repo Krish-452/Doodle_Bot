@@ -72,7 +72,7 @@ export function ResultScreen({
       </div>
 
       {/* Summary Card */}
-      <div className="w-full rounded-2xl bg-surface-muted/60 p-5 border border-surface-muted space-y-3">
+      <div className="w-full rounded-2xl glass p-5 border border-surface-muted space-y-3">
         <div className="flex items-center justify-between text-sm py-1 border-b border-surface-muted">
           <span className="text-ink-muted">Participant</span>
           <span className="font-semibold text-ink">{participantName}</span>

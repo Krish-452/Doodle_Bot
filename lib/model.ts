@@ -147,7 +147,7 @@ export async function predict(source: HTMLCanvasElement): Promise<Prediction[]> 
 
   const probabilities: Float32Array = tf.tidy(() => {
     const input = preprocess(source, tf);
-    const output = model.predict(input);
+    const output = (model as any).predict(input);
     return output.dataSync();
   });
 

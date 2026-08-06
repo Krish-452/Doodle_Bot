@@ -13,7 +13,7 @@ export function ScreenShell({ children, showLogo = true, className = "" }: Scree
   return (
     <div className={`flex min-h-dvh flex-col bg-surface text-ink antialiased ${className}`}>
       {showLogo && (
-        <header className="flex items-center justify-between border-b border-surface-muted px-4 lg:px-8 py-3 bg-white/90 backdrop-blur-md sticky top-0 z-30 shadow-xs">
+        <header className="flex items-center justify-between border-b border-ieee-blue/20 px-4 lg:px-8 py-3 glass sticky top-0 z-30 shadow-xs">
           <Link href="/" className="flex items-center gap-3 group">
             <img
               src="/ieee-logo.svg"

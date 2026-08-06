@@ -70,7 +70,7 @@ export default function LandingPage() {
       <div className="flex h-dvh flex-col items-center justify-between p-6 max-w-md lg:max-w-xl mx-auto w-full text-center">
         {/* Header Branding Lockup */}
         <div className="pt-6 sm:pt-10 space-y-4">
-          <div className="inline-flex items-center gap-3 bg-white/90 px-4 py-2 rounded-full border border-ieee-blue/20 shadow-sm backdrop-blur-sm">
+          <div className="inline-flex items-center gap-3 glass border border-ieee-blue/20 px-4 py-2 rounded-full shadow-sm">
             <img src="/ieee-logo.svg" alt="IEEE Logo" className="h-6 w-auto object-contain" />
             <div className="text-left border-l border-ieee-blue/15 pl-2.5">
               <span className="font-bold text-ieee-blue text-xs leading-none block">IEEE Ahmedabad University</span>

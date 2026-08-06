@@ -1,3 +1,4 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
 @import "tailwindcss";
 
 /*
@@ -15,7 +16,8 @@
   --color-ieee-blue: #00629b;
   --color-ieee-blue-dark: #00416a;
   --color-ieee-blue-light: #4a91bf;
-  --color-ieee-cyan: #00b5e2;
+  --color-ieee-cyan-light: #4fd9ff;
+
 
   /* Surfaces */
   --color-surface: #ffffff;
@@ -59,6 +61,11 @@ body {
   touch-action: none;
   user-select: none;
   -webkit-touch-callout: none;
+}
+
+@utility glass {
+  background: rgba(255,255,255,0.8);
+  backdrop-filter: blur(8px);
 }
 
 @keyframes fadeIn {
