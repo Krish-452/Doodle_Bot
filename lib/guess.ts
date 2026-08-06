@@ -1,4 +1,5 @@
 import type { GuessState, Prediction, Word } from "./types";
+import { CONFIDENCE_THRESHOLD, REQUIRED_CONSECUTIVE_SAMPLES } from "./constants";
 
 /**
  * Win detection.
@@ -27,17 +28,14 @@ export const INITIAL_GUESS_STATE: GuessState = {
  * Pure: same inputs, same output, no side effects. D calls it once per sample and stores the
  * result, passing it back as `previous` on the next sample.
  *
- * Implementation notes for whoever fills this in:
- *   - Match against `target.labels`, not `target.id`. Some words accept several model classes
+ *   - Matches against `target.labels`, not `target.id`. Some words accept several model classes
  *     ("couch" / "sofa"), and any of them counts.
- *   - `topGuess` should be the display label when the top prediction matches the target, and
- *     the raw model class otherwise — it is shown to the player as "AI thinks: ___".
- *   - Reset `streak` to 0 on any sample where the target is not top-1 above threshold. The
+ *   - `topGuess` is the display label when the top prediction matches the target, and the raw
+ *     model class otherwise — it is shown to the player as "AI thinks: ___", win or not.
+ *   - `streak` resets to 0 on any sample where the target is not top-1 above threshold. The
  *     samples must be consecutive; a near-miss in between does not carry the streak.
- *   - Once `won` is true, return early and leave it true.
+ *   - Once `won` is true, this returns early and leaves it true — terminal state.
  */
-import { CONFIDENCE_THRESHOLD, REQUIRED_CONSECUTIVE_SAMPLES } from "./constants";
-
 export function evaluateGuess(
   predictions: Prediction[],
   target: Word,
