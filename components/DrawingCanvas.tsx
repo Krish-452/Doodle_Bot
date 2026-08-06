@@ -12,10 +12,13 @@ import type { CanvasHandle } from "../lib/types";
 
 interface DrawingCanvasProps {
   disabled?: boolean;
+  /** Called after the player clears the canvas via the "Clear Canvas" button, so the parent
+   *  can reset any guess state tied to the now-erased strokes (e.g. the "AI thinks" strip). */
+  onClear?: () => void;
 }
 
 export const DrawingCanvas = forwardRef<CanvasHandle, DrawingCanvasProps>(
-  ({ disabled = false }, ref) => {
+  ({ disabled = false, onClear }, ref) => {
     const canvasRef = useRef<HTMLCanvasElement | null>(null);
     const isDrawingRef = useRef<boolean>(false);
     const isDirtyRef = useRef<boolean>(false);
@@ -278,7 +281,10 @@ export const DrawingCanvas = forwardRef<CanvasHandle, DrawingCanvasProps>(
 
           <button
             type="button"
-            onClick={clearCanvas}
+            onClick={() => {
+              clearCanvas();
+              onClear?.();
+            }}
             disabled={disabled}
             className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium text-urgent bg-urgent/10 hover:bg-urgent/20 rounded-lg disabled:opacity-40 transition-colors"
           >

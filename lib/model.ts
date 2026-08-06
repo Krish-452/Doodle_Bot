@@ -237,7 +237,7 @@ function preprocess(source: HTMLCanvasElement, tf: any) {
   ctx.drawImage(source, cropX, cropY, cropSize, cropSize, 0, 0, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE);
 
   const { data } = ctx.getImageData(0, 0, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE);
-  const buf = new Float32Array(MODEL_INPUT_SIZE * MODEL_INPUT_SIZE);
+  let buf: Float32Array<ArrayBuffer> = new Float32Array(MODEL_INPUT_SIZE * MODEL_INPUT_SIZE);
   for (let i = 0; i < buf.length; i++) {
     const r = data[i * 4];
     const g = data[i * 4 + 1];
@@ -246,5 +246,44 @@ function preprocess(source: HTMLCanvasElement, tf: any) {
     buf[i] = (255 - gray) / 255; // invert + normalize: ink -> ~1, background -> ~0
   }
 
+  // Real freehand strokes are drawn at a fixed pixel width regardless of how large or spread
+  // out the doodle is. Cropping to the ink bbox and downscaling to 28x28 (see comment above)
+  // shrinks that fixed-width stroke by whatever the crop-to-28 ratio is, so a drawing that
+  // fills most of a large phone canvas ends up as a thin, broken, ~1px-wide line at 28x28 -
+  // nothing like the solid, dense strokes Quick, Draw! bitmaps render at this resolution.
+  // Confirmed with scripts/diagnose-model.mjs: a house silhouette at typical canvas sizes was
+  // classified "sun" at 60-80% confidence pre-fix (ink density ~10-17%) purely from being too
+  // sparse, not from being a bad drawing. Dilating (3x3 max filter, grows ink ~1px) and then
+  // boosting partial-coverage/anti-aliased pixels back toward full ink intensity fixed it:
+  // same house silhouette classified correctly at 74-99.6% post-fix, umbrella similarly went
+  // from misread as "lightning" to 81-92% correct. Both steps are shape-preserving - they only
+  // thicken and darken existing ink, they don't move or add strokes.
+  buf = dilate(buf, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE);
+  for (let i = 0; i < buf.length; i++) {
+    buf[i] = Math.min(1, Math.pow(buf[i], 0.6) * 1.15);
+  }
+
   return tf.tensor4d(buf, [1, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE, 1]);
+}
+
+/** 3x3 max-filter dilation: grows ink outward by ~1px so thin/broken downscaled strokes read
+ *  as solid ink to the model, instead of vanishing into scattered anti-aliased pixels. */
+function dilate(buf: Float32Array<ArrayBuffer>, width: number, height: number): Float32Array<ArrayBuffer> {
+  const out = new Float32Array(buf.length);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let max = 0;
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+            max = Math.max(max, buf[ny * width + nx]);
+          }
+        }
+      }
+      out[y * width + x] = max;
+    }
+  }
+  return out;
 }
