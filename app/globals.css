@@ -23,6 +23,14 @@
   --color-ieee-blue: #00629b;
   --color-ieee-blue-dark: #00416a;
   --color-ieee-blue-light: #4a91bf;
+  /*
+   * 19a347a renamed this to --color-ieee-cyan-light (and changed its hex) without updating the
+   * five components still using text-ieee-cyan / bg-ieee-cyan / border-ieee-cyan, which then
+   * generated no CSS at all (Issue #39). Restored rather than migrating those call sites, since
+   * the brand-hex question this token depends on is still open (#36) and this is the version
+   * docs/03-design-system.md § 2 already documents.
+   */
+  --color-ieee-cyan: #00b5e2;
   --color-ieee-cyan-light: #4fd9ff;
 
 

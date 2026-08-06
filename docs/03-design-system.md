@@ -38,6 +38,7 @@ utilities from them automatically — declaring `--color-ieee-blue` yields `bg-i
   --color-ieee-blue-dark: #00416a;
   --color-ieee-blue-light: #4a91bf;
   --color-ieee-cyan: #00b5e2;
+  --color-ieee-cyan-light: #4fd9ff;
 
   /* Surfaces */
   --color-surface: #ffffff;
