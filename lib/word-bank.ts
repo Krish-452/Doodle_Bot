@@ -64,7 +64,6 @@ export const WORD_BANK: Word[] = [
   { id: "scissors", labels: ["scissors"], difficulty: "medium" },
   { id: "t-shirt", labels: ["t-shirt", "tshirt"], difficulty: "medium" },
   { id: "table", labels: ["table"], difficulty: "medium" },
-  { id: "umbrella", labels: ["umbrella"], difficulty: "medium" },
   { id: "wheel", labels: ["wheel"], difficulty: "medium" },
 
   // Hard
@@ -87,7 +86,16 @@ export const WORD_BANK: Word[] = [
 
 /** Helper to pick 3 distinct random words from the bank */
 export function pickThreeWords(): Word[] {
-  const shuffled = [...WORD_BANK].sort(() => 0.5 - Math.random());
+  const seen = new Set<string>();
+  const uniqueBank: Word[] = [];
+  for (const w of WORD_BANK) {
+    if (!seen.has(w.id)) {
+      seen.add(w.id);
+      uniqueBank.push(w);
+    }
+  }
+  const shuffled = [...uniqueBank].sort(() => 0.5 - Math.random());
   return shuffled.slice(0, 3);
 }
+
 

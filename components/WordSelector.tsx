@@ -7,9 +7,10 @@ import { Card } from "./Card";
 interface WordSelectorProps {
   words: Word[];
   onSelect: (word: Word) => void;
+  disabled?: boolean;
 }
 
-export function WordSelector({ words, onSelect }: WordSelectorProps) {
+export function WordSelector({ words, onSelect, disabled = false }: WordSelectorProps) {
   const getDifficultyColor = (diff: string) => {
     switch (diff) {
       case "easy":
@@ -27,16 +28,22 @@ export function WordSelector({ words, onSelect }: WordSelectorProps) {
     <div className="flex flex-col w-full max-w-md mx-auto space-y-4 py-4">
       <div className="text-center space-y-1">
         <h2 className="text-2xl font-bold text-ink">Choose a Word</h2>
-        <p className="text-sm text-ink-muted">Tap any card to lock in your choice</p>
+        <p className="text-sm text-ink-muted">
+          {disabled ? "Waiting for AI model to load..." : "Tap any card to lock in your choice"}
+        </p>
       </div>
 
       <div className="grid grid-cols-1 gap-4 pt-2">
         {words.map((word) => (
           <Card
             key={word.id}
-            interactive
-            onClick={() => onSelect(word)}
-            className="flex items-center justify-between p-6 hover:border-ieee-blue group transition-all"
+            interactive={!disabled}
+            onClick={() => {
+              if (!disabled) onSelect(word);
+            }}
+            className={`flex items-center justify-between p-6 transition-all ${
+              disabled ? "opacity-50 pointer-events-none bg-surface-muted" : "hover:border-ieee-blue group"
+            }`}
           >
             <span className="text-2xl font-bold capitalize text-ink group-hover:text-ieee-blue transition-colors">
               {word.id}
@@ -54,3 +61,4 @@ export function WordSelector({ words, onSelect }: WordSelectorProps) {
     </div>
   );
 }
+

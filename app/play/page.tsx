@@ -9,7 +9,7 @@ import { DrawingCanvas } from "../../components/DrawingCanvas";
 import { GuessStrip } from "../../components/GuessStrip";
 import { ResultScreen } from "../../components/ResultScreen";
 import { pickThreeWords } from "../../lib/word-bank";
-import { loadModel } from "../../lib/model";
+import { loadModel, isModelReady } from "../../lib/model";
 import { INITIAL_GUESS_STATE } from "../../lib/guess";
 import { submitResult } from "../../lib/data";
 import type { CanvasHandle, GuessState, Word } from "../../lib/types";
@@ -75,8 +75,9 @@ export default function PlayPage() {
       });
   }, [router]);
 
-  // 2. Select Word action -> Go to countdown
+  // 2. Select Word action -> Go to countdown (gated on model ready)
   const handleSelectWord = (word: Word) => {
+    if (isModelLoading || !isModelReady()) return;
     setSelectedWord(word);
     setPhase("countdown");
   };
@@ -197,7 +198,11 @@ export default function PlayPage() {
                 Loading AI Recognition Model...
               </div>
             )}
-            <WordSelector words={wordChoices} onSelect={handleSelectWord} />
+            <WordSelector
+              words={wordChoices}
+              onSelect={handleSelectWord}
+              disabled={isModelLoading || !isModelReady()}
+            />
           </div>
         )}
 

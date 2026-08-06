@@ -12,9 +12,16 @@ export function CountdownOverlay({ word, onComplete }: CountdownOverlayProps) {
   const [count, setCount] = useState(3);
 
   useEffect(() => {
-    if (count <= 0) {
+    if (count < 0) {
       onComplete();
       return;
+    }
+
+    if (count === 0) {
+      const goTimer = setTimeout(() => {
+        onComplete();
+      }, 500);
+      return () => clearTimeout(goTimer);
     }
 
     const timer = setInterval(() => {
@@ -27,7 +34,7 @@ export function CountdownOverlay({ word, onComplete }: CountdownOverlayProps) {
   return (
     <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-ieee-blue/95 text-white p-6 backdrop-blur-md animate-fade-in">
       <div className="text-center space-y-4">
-        <p className="text-sm font-semibold uppercase tracking-widest text-ieee-cyan">
+        <p className="text-sm font-semibold uppercase tracking-widest text-white/90">
           Get ready to draw
         </p>
 
@@ -40,6 +47,7 @@ export function CountdownOverlay({ word, onComplete }: CountdownOverlayProps) {
             {count > 0 ? count : "GO!"}
           </span>
         </div>
+
 
         <p className="text-xs text-white/80 max-w-xs mx-auto">
           Draw clearly so the computer vision model can guess your word in real-time!
