@@ -1,24 +1,28 @@
 /**
  * TF.js sketch classifier, held as a module-level singleton (issue #5).
  *
- * Model sourced and vendored for issue #3 (doodleNet, 345-class QuickDraw CNN — see
- * https://github.com/yining1023/doodleNet). Validated preprocessing spec, confirmed against
- * the vendored model.json and the reference demo's own preprocessing code:
+ * Model swapped for issue #19 (FALLBACK — custom-trained small CNN, 18 classes) after
+ * doodleNet (issue #3) couldn't reach acceptable real-drawing accuracy. Trained in Python
+ * (tf_keras) on pre-rendered Quick, Draw! numpy_bitmap samples (12k/class), 94.5% validation
+ * accuracy, exported with the tensorflowjs Python package. See scratchpad/train_py/ for the
+ * training pipeline and training_report.txt for the run's numbers.
  *   - Input tensor: [1, 28, 28, 1], single grayscale channel.
  *   - Canvas is drawn black ink on white background (this project's convention).
  *   - Combined invert + normalize in one step: value = (255 - grayscale) / 255.
  *     Ink pixels -> ~1.0, background -> ~0.0. Do NOT normalize to [0,1] first and invert
  *     separately with a different formula — this exact formula is what the model saw in training.
- *   - Class list + order: public/model/class_names.txt (345 labels, index i = output unit i).
- *     Confirmed identical, in order, to the reference demo's own CLASSES array. This file is
- *     fetched once at load time — the output tensor's unit i means class_names[i], nothing else.
- *     An earlier version of this file mapped output indices against the word bank's labels
- *     instead of the model's own class list; that produced confident, consistently wrong
- *     labels because the two orderings have nothing to do with each other. Do not reintroduce
- *     that shortcut — always resolve labels through the fetched class list.
- *   - Automated (non-hand-drawn) validation only got a rough signal — see issue #3's comment
- *     for the caveat and the per-category table. Re-validate with real hand-drawn strokes
- *     before trusting any specific category as reliable.
+ *     Confirmed empirically on the raw Quick, Draw! .npy source: background pixels are 0,
+ *     ink pixels are positive (white-ink-on-black) — same polarity doodleNet used, so this
+ *     formula carried over unchanged from the #3/#5 model swap.
+ *   - Class list + order: public/model/class_names.txt (18 labels, index i = output unit i,
+ *     same order as training). This file is fetched once at load time — the output tensor's
+ *     unit i means class_names[i], nothing else. An earlier version of this file mapped output
+ *     indices against the word bank's labels instead of the model's own class list; that
+ *     produced confident, consistently wrong labels because the two orderings have nothing to
+ *     do with each other. Do not reintroduce that shortcut — always resolve labels through the
+ *     fetched class list.
+ *   - Re-validate with real hand-drawn strokes before trusting any specific category as
+ *     reliable — see issue #19's step 4 and lib/word-bank.ts for the current results.
  *
  * Rules that survive whichever model is chosen (docs/02-architecture.md § 4, CLAUDE.md):
  *   - Load once, at app start. Never per round, never per component mount.
@@ -155,8 +159,71 @@ export async function predict(source: HTMLCanvasElement): Promise<Prediction[]> 
   return ranked;
 }
 
+// Ink counts as any pixel visibly darker than the white background; this only needs to
+// separate "background" from "something was drawn here", not detect fine strokes.
+const INK_GRAY_THRESHOLD = 250;
+// The Quick, Draw! bitmap renderer normalizes each sample to its own ink bounding box before
+// rasterizing to 28x28, so drawings fill most of the frame. This project's canvas is much
+// larger than 28x28 and users draw at arbitrary size/position within it — a naive full-canvas
+// downscale (the previous approach) shrinks a small or off-center doodle to a tiny blob with
+// nothing like the training data's fill ratio, and accuracy on real freehand drawings suffers
+// badly as a result. Cropping to the ink's bounding box (plus padding) before downscaling
+// matches what the model actually saw in training.
+const BBOX_PADDING_FACTOR = 1.25;
+
+/** Finds the pixel bounding box of everything drawn on `source`, or null if it's blank. */
+function findInkBoundingBox(
+  data: Uint8ClampedArray,
+  width: number,
+  height: number,
+): { minX: number; minY: number; maxX: number; maxY: number } | null {
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const i = (y * width + x) * 4;
+      const gray = (data[i] + data[i + 1] + data[i + 2]) / 3;
+      if (gray < INK_GRAY_THRESHOLD) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+
+  return maxX >= minX ? { minX, minY, maxX, maxY } : null;
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function preprocess(source: HTMLCanvasElement, tf: any) {
+  const sourceCtx = source.getContext("2d");
+  if (!sourceCtx) {
+    throw new Error("lib/model.ts: could not get 2d context for source canvas");
+  }
+  const sourceImage = sourceCtx.getImageData(0, 0, source.width, source.height);
+  const bbox = findInkBoundingBox(sourceImage.data, source.width, source.height);
+
+  // Square crop region in source-canvas coordinates: centered on the ink bbox, padded, and
+  // falling back to the whole canvas when nothing has been drawn yet (matches prior behavior).
+  let cropX: number, cropY: number, cropSize: number;
+  if (bbox) {
+    const bboxW = bbox.maxX - bbox.minX;
+    const bboxH = bbox.maxY - bbox.minY;
+    const cx = (bbox.minX + bbox.maxX) / 2;
+    const cy = (bbox.minY + bbox.maxY) / 2;
+    cropSize = Math.max(bboxW, bboxH, 1) * BBOX_PADDING_FACTOR;
+    cropX = cx - cropSize / 2;
+    cropY = cy - cropSize / 2;
+  } else {
+    cropSize = Math.max(source.width, source.height);
+    cropX = 0;
+    cropY = 0;
+  }
+
   const offscreen = document.createElement("canvas");
   offscreen.width = MODEL_INPUT_SIZE;
   offscreen.height = MODEL_INPUT_SIZE;
@@ -167,7 +234,7 @@ function preprocess(source: HTMLCanvasElement, tf: any) {
 
   ctx.fillStyle = "#FFFFFF";
   ctx.fillRect(0, 0, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE);
-  ctx.drawImage(source, 0, 0, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE);
+  ctx.drawImage(source, cropX, cropY, cropSize, cropSize, 0, 0, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE);
 
   const { data } = ctx.getImageData(0, 0, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE);
   const buf = new Float32Array(MODEL_INPUT_SIZE * MODEL_INPUT_SIZE);
