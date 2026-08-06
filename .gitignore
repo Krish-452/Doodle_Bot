@@ -40,3 +40,14 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# training pipeline (training/README.md) - reproducible from download_data.py, not committed
+/scratchpad_train_venv/
+/training/data/
+__pycache__/
+*.pyc
+
+# candidate model artifacts - training/train.py writes here; promoted to model.json/*.bin
+# manually per training/README.md, never committed as _candidate_*
+/public/model/_candidate_tfjs/
+/public/model/_candidate_report.json

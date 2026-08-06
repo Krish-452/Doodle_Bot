@@ -124,6 +124,14 @@ export default function PlayPage() {
     handleEndRound(true);
   }, [handleEndRound]);
 
+  // Erasing the canvas erases the evidence behind the current guess too - the "AI thinks"
+  // strip and streak must not linger on strokes that no longer exist.
+  const handleCanvasClear = useCallback(() => {
+    setGuessState(INITIAL_GUESS_STATE);
+    guessStateRef.current = INITIAL_GUESS_STATE;
+    setTopConfidence(undefined);
+  }, []);
+
   useSampleLoop({
     isActive: phase === "drawing",
     canvasRef,
@@ -216,10 +224,10 @@ export default function PlayPage() {
         {/* State 3: Drawing Canvas & Live Guessing */}
         {/* Responsive Grid: Below lg: single column stacked. lg: 2-column layout (Canvas Left, Controls Right) */}
         <div className={`flex-1 flex-col lg:flex-row lg:grid lg:grid-cols-12 lg:gap-8 min-h-0 ${phase === "drawing" ? "flex lg:grid" : "hidden"}`}>
-          
+
           {/* Left Column (Desktop): Canvas Area (Col 1-7 or 1-8) */}
           <div className="flex-1 flex flex-col min-h-0 lg:col-span-9 xl:col-span-10 h-full">
-            <DrawingCanvas ref={canvasRef} />
+            <DrawingCanvas ref={canvasRef} onClear={handleCanvasClear} />
           </div>
 
           {/* Right Rail (Desktop): Word Prompt, Timer, Live Guess Strip (Col 8-12 or 9-12) */}
