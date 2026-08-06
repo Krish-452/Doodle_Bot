@@ -63,6 +63,12 @@ export interface GameResultInput {
 
 /** One row of the aggregate leaderboard view. */
 export interface LeaderboardRow {
+  /**
+   * 1-based position in the sorted list. `leaderboard_view` has no `rank` column — the SQL
+   * ordered-set aggregate doesn't compose with the anon-facing REST select — so this is assigned
+   * client-side in lib/data.ts, using the same comparator for both the remote and offline
+   * (computeLocalLeaderboard) paths so the two always agree.
+   */
   rank: number;
   participantId: string;
   name: string;

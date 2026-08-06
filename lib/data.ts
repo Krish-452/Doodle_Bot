@@ -109,18 +109,118 @@ function saveLocalResult(result: GameResultInput) {
   }
 }
 
+/**
+ * A row exactly as `leaderboard_view` returns it.
+ *
+ * The view is snake_case and has no `rank` column, so it does NOT match LeaderboardRow.
+ * Casting the response straight to LeaderboardRow compiles fine and fails silently at runtime —
+ * every renamed field lands as `undefined`. Map it explicitly instead.
+ *
+ * Postgres `numeric` may serialise as a JSON string rather than a number depending on the
+ * column type in the view, so the numeric fields are coerced rather than trusted.
+ */
+interface LeaderboardViewRow {
+  participant_id: string;
+  name: string;
+  score: number | string;
+  successful_guesses: number | string;
+  total_games: number | string;
+  best_time_seconds: number | string | null;
+}
+
+function toNumber(value: number | string | null | undefined): number {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function toNullableNumber(value: number | string | null | undefined): number | null {
+  if (value === null || value === undefined) return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * Narrows an unknown row to LeaderboardViewRow rather than trusting an `as` cast.
+ *
+ * Deliberately not a full shape validator — the numeric fields are coerced by toNumber /
+ * toNullableNumber regardless of what arrives, so this only needs to catch "the view shape
+ * changed entirely" (participant_id renamed, view swapped, PostgREST returned something odd),
+ * not every possible drift. participant_id is the one field that can't be defaulted: it's the
+ * React list key and what the result screen matches "my rank" against.
+ */
+function isLeaderboardViewRow(row: unknown): row is LeaderboardViewRow {
+  return (
+    typeof row === "object" &&
+    row !== null &&
+    typeof (row as Record<string, unknown>).participant_id === "string" &&
+    typeof (row as Record<string, unknown>).name === "string"
+  );
+}
+
 export async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
   try {
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase.from("leaderboard_view").select("*");
-    if (!error && data && data.length > 0) {
-      return data as LeaderboardRow[];
+    // Explicit column list rather than `*`: if the view is ever reshaped this fails loudly
+    // with a 400 instead of silently returning rows full of undefined fields.
+    const { data, error } = await supabase
+      .from("leaderboard_view")
+      .select("participant_id, name, score, successful_guesses, total_games, best_time_seconds");
+
+    if (error) {
+      // Logged, not swallowed — a silent fallback to local data is what hid the shape
+      // mismatch here in the first place.
+      console.warn("leaderboard_view query failed, using local leaderboard:", error.message);
+    } else if (data && data.length > 0) {
+      const validRows = data.filter(isLeaderboardViewRow);
+      if (validRows.length < data.length) {
+        // Not thrown — one malformed row shouldn't take down the whole board — but loud,
+        // because this means the view's shape drifted from what this file expects.
+        console.warn(
+          `leaderboard_view: dropped ${data.length - validRows.length} row(s) missing participant_id/name. View shape may have changed — see docs/02-architecture.md § 7.`,
+        );
+      }
+      const rows = validRows.map((row) => ({
+        participantId: row.participant_id,
+        name: row.name,
+        score: toNumber(row.score),
+        successfulGuesses: toNumber(row.successful_guesses),
+        gamesPlayed: toNumber(row.total_games),
+        bestTimeSeconds: toNullableNumber(row.best_time_seconds),
+      }));
+      // The view has no rank column and a bare select has no ordering guarantee, so rank is
+      // assigned here using the same comparator as the offline path.
+      return sortAndRank(rows);
     }
   } catch (err) {
-    // Supabase error or missing, fallback to local compute
+    console.warn("Supabase unreachable, using local leaderboard:", err);
   }
 
   return computeLocalLeaderboard();
+}
+
+/** A leaderboard row before rank has been assigned. */
+type UnrankedRow = Omit<LeaderboardRow, "rank">;
+
+/** Score desc, then successful guesses desc, then fastest correct round asc. */
+function compareRows(a: UnrankedRow, b: UnrankedRow): number {
+  if (b.score !== a.score) return b.score - a.score;
+  if (b.successfulGuesses !== a.successfulGuesses) {
+    return b.successfulGuesses - a.successfulGuesses;
+  }
+  if (a.bestTimeSeconds !== null && b.bestTimeSeconds !== null) {
+    return a.bestTimeSeconds - b.bestTimeSeconds;
+  }
+  return 0;
+}
+
+/**
+ * Sorts and assigns 1-based rank. Shared by the remote and offline paths so the stall display
+ * orders identically whether or not the network is up.
+ */
+function sortAndRank(rows: UnrankedRow[]): LeaderboardRow[] {
+  return [...rows]
+    .sort(compareRows)
+    .map((row, idx) => ({ ...row, rank: idx + 1 }));
 }
 
 export function computeLocalLeaderboard(): LeaderboardRow[] {
@@ -166,32 +266,19 @@ export function computeLocalLeaderboard(): LeaderboardRow[] {
       }
     }
 
-    const rows: LeaderboardRow[] = Object.entries(statsMap).map(([pId, data]) => {
-      const score = Math.round(
+    const rows: UnrankedRow[] = Object.entries(statsMap).map(([pId, data]) => ({
+      participantId: pId,
+      name: data.name,
+      score: Math.round(
         data.successfulGuesses * RANKING_WEIGHT_GUESSES + data.speedBonus * RANKING_WEIGHT_SPEED
-      );
-      return {
-        rank: 0,
-        participantId: pId,
-        name: data.name,
-        score,
-        successfulGuesses: data.successfulGuesses,
-        gamesPlayed: data.gamesPlayed,
-        bestTimeSeconds: data.bestTimeSeconds !== null ? Number(data.bestTimeSeconds.toFixed(1)) : null,
-      };
-    });
+      ),
+      successfulGuesses: data.successfulGuesses,
+      gamesPlayed: data.gamesPlayed,
+      bestTimeSeconds:
+        data.bestTimeSeconds !== null ? Number(data.bestTimeSeconds.toFixed(1)) : null,
+    }));
 
-    // Sort by score desc, then successful guesses desc, then best time asc
-    rows.sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      if (b.successfulGuesses !== a.successfulGuesses) return b.successfulGuesses - a.successfulGuesses;
-      if (a.bestTimeSeconds !== null && b.bestTimeSeconds !== null) {
-        return a.bestTimeSeconds - b.bestTimeSeconds;
-      }
-      return 0;
-    });
-
-    return rows.map((row, idx) => ({ ...row, rank: idx + 1 }));
+    return sortAndRank(rows);
   } catch (e) {
     console.error("Failed to compute local leaderboard", e);
     return [];
