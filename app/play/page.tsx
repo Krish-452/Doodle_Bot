@@ -225,12 +225,12 @@ export default function PlayPage() {
         {/* Responsive Grid: Below lg: single column stacked. lg: 2-column layout (Canvas Left, Controls Right) */}
         <div className={`flex-1 flex-col lg:flex-row lg:grid lg:grid-cols-12 lg:gap-8 min-h-0 ${phase === "drawing" ? "flex lg:grid" : "hidden"}`}>
 
-          {/* Left Column (Desktop): Canvas Area (Col 1-7 or 1-8) */}
-          <div className="flex-1 flex flex-col min-h-0 lg:col-span-9 xl:col-span-10 h-full">
+          {/* Left Column (Desktop): Canvas Area (col-span-9 at lg, col-span-10 at xl) */}
+          <div className="relative w-full aspect-square lg:col-span-9 xl:col-span-10">
             <DrawingCanvas ref={canvasRef} onClear={handleCanvasClear} />
           </div>
 
-          {/* Right Rail (Desktop): Word Prompt, Timer, Live Guess Strip (Col 8-12 or 9-12) */}
+          {/* Right Rail (Desktop): Word Prompt, Timer, Live Guess Strip (lg:col-span-3, xl:col-span-2) */}
           <div className="lg:col-span-3 xl:col-span-2 flex flex-col justify-between space-y-4 pt-3 lg:pt-0 bg-white/80 backdrop-blur-sm rounded-2xl border border-ieee-blue/20 shadow-lg">
             {/* Desktop Target & Timer Panel */}
             <div className="hidden lg:flex flex-col space-y-3 bg-white p-5 rounded-2xl border border-ieee-blue/20 shadow-xs">
