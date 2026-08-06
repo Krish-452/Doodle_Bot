@@ -238,6 +238,20 @@ logical surface is:
 
 This is a **two-write, one-read system** at its core. Resist growing it.
 
+`leaderboard_view`'s DDL lives in `supabase/schema.sql` (Issue #4) and returns exactly these
+snake_case columns — no `rank` column; the client assigns rank (see `lib/data.ts`, Issue #40):
+
+| Column | Type | Notes |
+| --- | --- | --- |
+| `participant_id` | `uuid` | |
+| `name` | `text` | |
+| `score` | `numeric` | `(successful_guesses × W_A) + (speed_bonus × W_B)`, rounded |
+| `successful_guesses` | `bigint` | |
+| `total_games` | `bigint` | |
+| `best_time_seconds` | `numeric` \| `null` | `null` until the participant has a win |
+
+`word_records_view` is not implemented — it was always optional per this section.
+
 Write to Supabase from **client components** using the anon key. Server-side routes would add a
 hop for no benefit and break the offline-queue behavior described below.
 

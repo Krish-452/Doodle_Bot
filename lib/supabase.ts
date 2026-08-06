@@ -63,8 +63,9 @@ interface QueuedResult {
   result: GameResultInsert;
 }
 
-// TODO (Issue #13 / leaderboard): type leaderboard_view rows here once the view is defined.
-// Columns depend on the ranking formula in docs/02-architecture.md § 8, which is not finalised.
+// leaderboard_view is now defined in supabase/schema.sql (Issue #4) and documented in
+// docs/02-architecture.md § 7. Its row type (`LeaderboardViewRow`) lives in lib/data.ts, next to
+// the only code that reads it (Issue #40).
 
 // ---------------------------------------------------------------------------
 // Singleton Supabase client
