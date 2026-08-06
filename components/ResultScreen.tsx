@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import { FaBullseye, FaHourglassEnd, FaPalette, FaTrophy } from "react-icons/fa6";
 import { Button } from "./Button";
 import { fetchLeaderboard } from "../lib/data";
 
@@ -54,9 +55,9 @@ export function ResultScreen({
           }`}
         >
           {won ? (
-            <span className="text-6xl">🎯</span>
+            <FaBullseye aria-hidden="true" className="text-6xl" />
           ) : (
-            <span className="text-6xl">⏳</span>
+            <FaHourglassEnd aria-hidden="true" className="text-6xl" />
           )}
         </div>
 
@@ -98,14 +99,14 @@ export function ResultScreen({
       {/* Buttons */}
       <div className="flex flex-col w-full space-y-3 pt-2">
         <Button variant="primary" fullWidth onClick={onPlayAgain}>
-          Play Again 🎨
+          Play Again <FaPalette aria-hidden="true" className="inline text-ieee-cyan" />
         </Button>
 
         <Link
           href="/leaderboard"
           className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl px-6 py-3 text-base font-semibold border-2 border-ieee-blue text-ieee-blue hover:bg-ieee-blue/5 active:bg-ieee-blue/10 transition-all active:scale-[0.98] shadow-sm"
         >
-          View Leaderboard 🏆
+          View Leaderboard <FaTrophy aria-hidden="true" className="inline text-medal-gold" />
         </Link>
       </div>
     </div>

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { FaRobot, FaRocket } from "react-icons/fa6";
 import { Button } from "../components/Button";
 import { ScreenShell } from "../components/ScreenShell";
 import { createParticipant } from "../lib/data";
@@ -80,7 +81,11 @@ export default function LandingPage() {
 
           <div className="space-y-2 pt-2">
             <h1 className="text-4xl sm:text-5xl font-black text-ink tracking-tight">
-              DoodleBot <span className="inline-block hover:rotate-12 transition-transform">🤖</span>
+              DoodleBot{" "}
+              <FaRobot
+                aria-hidden="true"
+                className="inline align-[-0.125em] text-ieee-blue hover:rotate-12 transition-transform"
+              />
             </h1>
             <p className="text-xl sm:text-2xl font-bold text-ieee-blue text-balance">
               Draw it. Beat the AI. Top the board.
@@ -114,7 +119,7 @@ export default function LandingPage() {
           </div>
 
           <Button type="submit" variant="primary" fullWidth isLoading={isSubmitting}>
-            Start Playing 🚀
+            Start Playing <FaRocket aria-hidden="true" className="inline" />
           </Button>
         </form>
 

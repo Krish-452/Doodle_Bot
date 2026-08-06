@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { FaBolt } from "react-icons/fa6";
 
 interface GuessStripProps {
   topGuess: string | null;
@@ -24,7 +25,7 @@ export function GuessStrip({ topGuess, confidence, streak = 0 }: GuessStripProps
         <div className="flex items-center gap-2 shrink-0">
           {streak > 0 && (
             <span className="flex items-center gap-1 text-xs font-semibold text-win bg-win/10 px-2 py-0.5 rounded-full">
-              ⚡ {streak}/2
+              <FaBolt aria-hidden="true" className="text-win" /> {streak}/2
             </span>
           )}
           {confidence !== undefined && (

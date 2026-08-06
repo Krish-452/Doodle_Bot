@@ -2,6 +2,7 @@
 
 import React, { ReactNode } from "react";
 import Link from "next/link";
+import { FaTrophy } from "react-icons/fa6";
 
 interface ScreenShellProps {
   children: ReactNode;
@@ -34,7 +35,7 @@ export function ScreenShell({ children, showLogo = true, className = "" }: Scree
             className="inline-flex items-center gap-1.5 text-xs font-bold text-ieee-blue hover:text-ieee-blue-dark transition-all px-3 py-1.5 rounded-lg bg-ieee-blue/5 hover:bg-ieee-blue/10 border border-ieee-blue/15 shadow-xs"
           >
             <span>Leaderboard</span>
-            <span className="text-sm">🏆</span>
+            <FaTrophy aria-hidden="true" className="text-sm text-medal-gold" />
           </Link>
         </header>
       )}

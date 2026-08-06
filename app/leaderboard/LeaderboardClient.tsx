@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
+import { FaMedal, FaPalette, FaTrophy } from "react-icons/fa6";
 import { ScreenShell } from "../../components/ScreenShell";
 import { fetchLeaderboard } from "../../lib/data";
 import { getSupabaseClient } from "../../lib/supabase";
@@ -75,15 +76,15 @@ export function LeaderboardClient({ initialLeaderboard }: LeaderboardClientProps
           <div>
             <h1 className="text-3xl font-black text-ink tracking-tight flex items-center gap-2">
               <span>Leaderboard</span>
-              <span>🏆</span>
+              <FaTrophy aria-hidden="true" className="text-medal-gold" />
             </h1>
             <p className="text-xs font-semibold text-ink-muted">IEEE Ahmedabad University Student Branch • Live Standings</p>
           </div>
           <Link
             href="/play"
-            className="inline-flex items-center justify-center px-4 py-2 text-sm font-bold text-white bg-ieee-blue hover:bg-ieee-blue-dark rounded-xl shadow-sm transition-all active:scale-95 border border-ieee-blue/20"
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-bold text-white bg-ieee-blue hover:bg-ieee-blue-dark rounded-xl shadow-sm transition-all active:scale-95 border border-ieee-blue/20"
           >
-            Play Now 🎨
+            Play Now <FaPalette aria-hidden="true" className="text-ieee-cyan" />
           </Link>
         </div>
 
@@ -115,7 +116,7 @@ export function LeaderboardClient({ initialLeaderboard }: LeaderboardClientProps
 
           {leaderboard.length === 0 ? (
             <div className="py-12 text-center space-y-3 bg-surface-muted/50 rounded-2xl border border-surface-muted">
-              <span className="text-4xl block">🎨</span>
+              <FaPalette aria-hidden="true" className="text-4xl text-ieee-cyan" />
               <p className="text-sm font-semibold text-ink-muted">No games played yet today!</p>
               <p className="text-xs text-ink-muted">Be the first to draw and set a high score.</p>
             </div>
@@ -123,7 +124,14 @@ export function LeaderboardClient({ initialLeaderboard }: LeaderboardClientProps
             <div className="space-y-2">
               {leaderboard.map((row) => {
                 const isTop3 = row.rank <= 3;
-                const medal = row.rank === 1 ? "🥇" : row.rank === 2 ? "🥈" : row.rank === 3 ? "🥉" : null;
+                const medalColor =
+                  row.rank === 1
+                    ? "text-medal-gold"
+                    : row.rank === 2
+                    ? "text-medal-silver"
+                    : row.rank === 3
+                    ? "text-medal-bronze"
+                    : null;
 
                 return (
                   <div
@@ -147,7 +155,18 @@ export function LeaderboardClient({ initialLeaderboard }: LeaderboardClientProps
                             : "bg-surface-muted text-ink-muted"
                         }`}
                       >
-                        {medal ? medal : `#${row.rank}`}
+                        {medalColor ? (
+                          <>
+                            {/* The medal icon alone doesn't say WHICH medal to a screen reader,
+                                and previously the numeric rank was dropped entirely for top 3 —
+                                colour + icon shape was the only signal. Kept visually (that's the
+                                point of a medal), restored for assistive tech via sr-only text. */}
+                            <FaMedal aria-hidden="true" className={medalColor} />
+                            <span className="sr-only">Rank #{row.rank}</span>
+                          </>
+                        ) : (
+                          `#${row.rank}`
+                        )}
                       </div>
 
                       <div>

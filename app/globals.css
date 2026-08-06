@@ -45,6 +45,13 @@
   --color-timeout: #b4531f;
   --color-urgent: #c0392b;
 
+  /* Medal iconography (#37) — the leaderboard's rank badges already use amber/slate/orange
+     backgrounds (LeaderboardClient.tsx); these keep the medal icon in step with that instead of
+     introducing a fourth, uncoordinated colour system. */
+  --color-medal-gold: #b8860b;
+  --color-medal-silver: #6b7280;
+  --color-medal-bronze: #b45309;
+
   /* Type */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 
