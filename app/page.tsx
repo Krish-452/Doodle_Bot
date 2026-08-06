@@ -67,16 +67,17 @@ export default function LandingPage() {
 
   return (
     <ScreenShell showLogo={false} className="justify-center">
-      <main className="flex h-dvh flex-col items-center justify-between p-6 max-w-md mx-auto w-full text-center">
-        {/* Header Branding */}
+      <div className="flex h-dvh flex-col items-center justify-between p-6 max-w-md mx-auto w-full text-center">
+        {/* Header Branding Lockup (Harmonized with ScreenShell) */}
         <div className="pt-8 space-y-4">
-          <div className="inline-flex items-center gap-2 bg-ieee-blue/10 px-3 py-1.5 rounded-full border border-ieee-blue/20">
-            <div className="h-5 w-5 rounded-sm bg-ieee-blue text-white font-black text-xs flex items-center justify-center">
+          <div className="inline-flex items-center gap-2.5 bg-ieee-blue/10 px-4 py-2 rounded-full border border-ieee-blue/20">
+            <div className="flex h-6 w-6 items-center justify-center rounded-md bg-ieee-blue text-white font-bold text-xs shadow-sm">
               IEEE
             </div>
-            <span className="text-xs font-semibold text-ieee-blue tracking-wide">
-              IEEE Ahmedabad University Student Branch
-            </span>
+            <div className="text-left">
+              <span className="font-bold text-ieee-blue text-xs leading-none block">IEEE Ahmedabad University</span>
+              <span className="text-[10px] text-ink-muted leading-none block">Student Branch</span>
+            </div>
           </div>
 
           <div className="space-y-2">
@@ -122,7 +123,8 @@ export default function LandingPage() {
             IEEE Club Carnival AI Pictionary
           </p>
         </div>
-      </main>
+      </div>
     </ScreenShell>
+
   );
 }

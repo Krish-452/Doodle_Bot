@@ -25,11 +25,14 @@ export function ResultScreen({
   const [userRank, setUserRank] = useState<number | null>(null);
 
   useEffect(() => {
+    let isMounted = true;
     async function loadRank() {
+      // Micro-delay to ensure submitResult's localStorage write has completed
+      await new Promise((r) => setTimeout(r, 100));
       try {
         const board = await fetchLeaderboard();
         const userRow = board.find((r) => r.participantId === participantId);
-        if (userRow) {
+        if (isMounted && userRow) {
           setUserRank(userRow.rank);
         }
       } catch (e) {
@@ -37,12 +40,19 @@ export function ResultScreen({
       }
     }
     loadRank();
+    return () => {
+      isMounted = false;
+    };
   }, [participantId]);
 
   return (
     <div className="flex flex-col items-center justify-center text-center max-w-md w-full mx-auto space-y-6 py-6 animate-fade-in">
       <div className="space-y-2">
-        <div className="inline-flex items-center justify-center p-4 rounded-full bg-surface-muted mb-2">
+        <div
+          className={`inline-flex items-center justify-center p-4 rounded-full mb-2 ${
+            won ? "bg-win/10 text-win" : "bg-timeout/10 text-timeout"
+          }`}
+        >
           {won ? (
             <span className="text-6xl">🎯</span>
           ) : (
@@ -73,7 +83,7 @@ export function ResultScreen({
         </div>
         <div className="flex items-center justify-between text-sm py-1 border-b border-surface-muted">
           <span className="text-ink-muted">Time</span>
-          <span className="font-semibold text-ink">
+          <span className={`font-semibold ${won ? "text-win" : "text-timeout"}`}>
             {timeTakenSeconds ? `${timeTakenSeconds.toFixed(1)}s` : "Timed Out"}
           </span>
         </div>
@@ -91,12 +101,14 @@ export function ResultScreen({
           Play Again 🎨
         </Button>
 
-        <Link href="/leaderboard" className="w-full">
-          <Button variant="outline" fullWidth>
-            View Leaderboard 🏆
-          </Button>
+        <Link
+          href="/leaderboard"
+          className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl px-6 py-3 text-base font-semibold border-2 border-ieee-blue text-ieee-blue hover:bg-ieee-blue/5 active:bg-ieee-blue/10 transition-all active:scale-[0.98] shadow-sm"
+        >
+          View Leaderboard 🏆
         </Link>
       </div>
     </div>
   );
 }
+
