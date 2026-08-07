@@ -4,8 +4,8 @@
  * Model swapped for issue #19 (FALLBACK — custom-trained small CNN, 18 classes) after
  * doodleNet (issue #3) couldn't reach acceptable real-drawing accuracy. Trained in Python
  * (tf_keras) on pre-rendered Quick, Draw! numpy_bitmap samples (12k/class), 94.5% validation
- * accuracy, exported with the tensorflowjs Python package. See training/ for the training
- * pipeline (#33) — train.py, export_tfjs.py, download_data.py, compare_models.mjs.
+ * accuracy, exported with the tensorflowjs Python package. See training/ (training/README.md)
+ * for the training pipeline and public/model/_candidate_report.json for a given run's numbers.
  *   - Input tensor: [1, 28, 28, 1], single grayscale channel.
  *   - Canvas is drawn black ink on white background (this project's convention).
  *   - Combined invert + normalize in one step: value = (255 - grayscale) / 255.

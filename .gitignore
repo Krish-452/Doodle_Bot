@@ -56,3 +56,8 @@ __pycache__/
 # manually per training/README.md, never committed as _candidate_*
 /public/model/_candidate_tfjs/
 /public/model/_candidate_report.json
+/public/model/_candidate_checkpoint.weights.h5
+/public/model/_candidate_checkpoint.epoch
+
+# per-run training logs (training/train_run*.log) - local scratch, not reproducible artifacts
+/training/train_run*.log
