@@ -79,9 +79,10 @@ export function CountdownOverlay({ word, onComplete }: CountdownOverlayProps) {
               strokeWidth="5"
               strokeLinecap="round"
               strokeDasharray={circumference}
-              strokeDashoffset={ringProgress}
-              className="transition-all duration-1000 ease-linear"
-              style={{ filter: "drop-shadow(0 0 8px rgba(255,255,255,0.5))" }}
+              style={{
+                animation: "countdownRing 3.5s linear forwards",
+                filter: "drop-shadow(0 0 8px rgba(255,255,255,0.5))",
+              }}
             />
           </svg>
           <span

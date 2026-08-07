@@ -2,31 +2,59 @@
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import Link from "next/link";
-import { FaMedal, FaPalette, FaTrophy } from "react-icons/fa6";
+import { FaCircle, FaMedal, FaPalette, FaTrophy } from "react-icons/fa6";
 import { ScreenShell } from "../../components/ScreenShell";
 import { fetchLeaderboard } from "../../lib/data";
 import { getSupabaseClient } from "../../lib/supabase";
-import type { LeaderboardRow } from "../../lib/types";
+import type { LeaderboardSnapshot } from "../../lib/types";
 
 interface LeaderboardClientProps {
-  initialLeaderboard: LeaderboardRow[];
+  initialSnapshot: LeaderboardSnapshot;
 }
 
-export function LeaderboardClient({ initialLeaderboard }: LeaderboardClientProps) {
-  const [leaderboard, setLeaderboard] = useState<LeaderboardRow[]>(initialLeaderboard);
+/** Connection status shown by the pill next to the title. Derived, not stored — see below. */
+type ConnectionStatus = "live" | "reconnecting" | "offline";
+
+export function LeaderboardClient({ initialSnapshot }: LeaderboardClientProps) {
+  const [snapshot, setSnapshot] = useState<LeaderboardSnapshot>(initialSnapshot);
+  // Assume online until a browser 'offline' event says otherwise. Defaulting to true (rather
+  // than reading navigator.onLine during render) keeps the server and client's first render
+  // identical — navigator doesn't exist on the server, and reading it only in an effect avoids a
+  // hydration mismatch.
+  const [isOnline, setIsOnline] = useState(true);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
   const loadData = useCallback(async () => {
-    try {
-      const data = await fetchLeaderboard();
-      setLeaderboard(prev => (prev.length > 0 && data.length === 0 ? prev : data));
-    } catch (e) {
-      console.error("Failed to load leaderboard:", e);
-    }
+    // fetchLeaderboard() never throws (see lib/data.ts) — it always resolves to a snapshot,
+    // remote or local. Always render the latest one. The previous version kept stale rows
+    // whenever a refetch returned zero ("prev.length > 0 && data.length === 0 ? prev : data"),
+    // which froze the board on the last good read instead of showing the real state — exactly
+    // what #14 rules out ("a frozen board is worse than a slow one"). The status pill and the
+    // remote/local empty-state split below are what make a genuine drop visible instead.
+    const data = await fetchLeaderboard();
+    setSnapshot(data);
   }, []);
 
   useEffect(() => {
-    // Supabase Realtime subscription on game_results inserts
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    // Supabase Realtime subscription on game_results inserts.
+    //
+    // Under supabase/schema.sql's RLS policies this can never actually deliver an event: anon
+    // has no SELECT policy on game_results, and postgres_changes enforces RLS on the subscribing
+    // role (documented at schema.sql:113-119, deliberately — do not add a SELECT policy just to
+    // make this fire). Left wired up anyway: it's harmless, and it starts working for free if
+    // that policy decision is ever revisited. The 10s poll below is what actually keeps the
+    // board live.
     const supabase = getSupabaseClient();
     const channel = supabase
       .channel("leaderboard-changes")
@@ -58,6 +86,10 @@ export function LeaderboardClient({ initialLeaderboard }: LeaderboardClientProps
     };
   }, [loadData]);
 
+  const leaderboard = snapshot.rows;
+  const status: ConnectionStatus =
+    snapshot.source === "remote" ? "live" : isOnline ? "reconnecting" : "offline";
+
   // Compute headline stats
   const totalGames = leaderboard.reduce((acc, row) => acc + row.gamesPlayed, 0);
   const totalWins = leaderboard.reduce((acc, row) => acc + row.successfulGuesses, 0);
@@ -68,23 +100,55 @@ export function LeaderboardClient({ initialLeaderboard }: LeaderboardClientProps
     return min;
   }, null);
 
+  // Full literal class strings per status, not a template built from `status` — Tailwind v4's
+  // scanner statically greps source for class names, so `bg-${token}/10` would never generate
+  // the CSS (the string only exists at runtime). See CLAUDE.md's Tailwind v4 section.
+  const STATUS_COPY: Record<ConnectionStatus, { label: string; pillClass: string }> = {
+    live: {
+      label: "Live",
+      pillClass: "bg-win/10 border-win/20 text-win",
+    },
+    reconnecting: {
+      label: "Reconnecting…",
+      pillClass: "bg-ink-muted/10 border-ink-muted/20 text-ink-muted",
+    },
+    offline: {
+      label: "Offline",
+      pillClass: "bg-urgent/10 border-urgent/20 text-urgent",
+    },
+  };
+  const statusCopy = STATUS_COPY[status];
+
   return (
     <ScreenShell showLogo={true}>
       <div className="flex flex-1 flex-col max-w-2xl lg:max-w-4xl mx-auto w-full p-4 lg:p-8 space-y-6">
         {/* Title Header */}
-        <div className="flex items-center justify-between pt-2">
-          <div>
-            <h1 className="text-3xl font-black text-ink tracking-tight flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+          <div className="space-y-1">
+            <h1 className="text-3xl font-black text-ink tracking-tight flex items-center flex-wrap gap-2">
               <span>Leaderboard</span>
               <FaTrophy aria-hidden="true" className="text-medal-gold" />
+              {/* Connection status pill (Issue #14). "Live" only means the last read reached
+                  Supabase, not that the Realtime socket is delivering events — see the
+                  subscription comment below for why that channel can never fire under RLS. */}
+              <span
+                className={`inline-flex items-center gap-1.5 text-xs font-bold px-2.5 py-1 rounded-full border motion-safe:transition-colors ${statusCopy.pillClass}`}
+                role="status"
+              >
+                <FaCircle
+                  aria-hidden="true"
+                  className={`text-[6px] ${status === "reconnecting" ? "motion-safe:animate-pulse" : ""}`}
+                />
+                {statusCopy.label}
+              </span>
             </h1>
-            <p className="text-xs font-semibold text-ink-muted">IEEE Ahmedabad University Student Branch • Live Standings</p>
+            <p className="text-xs font-semibold text-ink-muted">Live Standings</p>
           </div>
           <Link
             href="/play"
-            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 text-sm font-bold text-white bg-ieee-blue hover:bg-ieee-blue-dark rounded-xl shadow-sm transition-all active:scale-95 border border-ieee-blue/20"
+            className="inline-flex items-center justify-center px-5 py-2.5 text-sm font-bold text-white bg-ieee-blue hover:bg-ieee-blue-dark rounded-xl shadow-sm transition-all active:scale-95 border border-ieee-blue/20 shrink-0 whitespace-nowrap self-start sm:self-auto"
           >
-            Play Now <FaPalette aria-hidden="true" className="text-ieee-cyan" />
+            Play Now
           </Link>
         </div>
 
@@ -114,7 +178,17 @@ export function LeaderboardClient({ initialLeaderboard }: LeaderboardClientProps
             Top Participants
           </h2>
 
-          {leaderboard.length === 0 ? (
+          {leaderboard.length === 0 && snapshot.source === "local" ? (
+            // Distinct from the genuinely-empty state below on purpose (Issue #14): this is the
+            // local fallback, not a confirmed empty board. On a stall display, showing the same
+            // "no games played" copy here would read as a healthy board that just hasn't seen a
+            // play yet, when it may in fact be disconnected from Supabase entirely.
+            <div className="py-12 text-center space-y-3 bg-urgent/5 rounded-2xl border border-urgent/20">
+              <FaCircle aria-hidden="true" className="text-2xl text-urgent" />
+              <p className="text-sm font-semibold text-ink">Can&apos;t reach the leaderboard</p>
+              <p className="text-xs text-ink-muted">Showing this device&apos;s local results. Retrying every 10s.</p>
+            </div>
+          ) : leaderboard.length === 0 ? (
             <div className="py-12 text-center space-y-3 bg-surface-muted/50 rounded-2xl border border-surface-muted">
               <FaPalette aria-hidden="true" className="text-4xl text-ieee-cyan" />
               <p className="text-sm font-semibold text-ink-muted">No games played yet today!</p>

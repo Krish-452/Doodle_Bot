@@ -71,12 +71,8 @@ export default function LandingPage() {
       <div className="flex h-dvh flex-col items-center justify-between p-6 max-w-md lg:max-w-xl mx-auto w-full text-center">
         {/* Header Branding Lockup */}
         <div className="pt-6 sm:pt-10 space-y-4">
-          <div className="inline-flex items-center gap-3 glass border border-ieee-blue/20 px-4 py-2 rounded-full shadow-sm">
-            <img src="/ieee-logo.svg" alt="IEEE Logo" className="h-6 w-auto object-contain" />
-            <div className="text-left border-l border-ieee-blue/15 pl-2.5">
-              <span className="font-bold text-ieee-blue text-xs leading-none block">IEEE Ahmedabad University</span>
-              <span className="text-[10px] font-semibold text-ink-muted leading-none block mt-0.5">Student Branch • Club Carnival</span>
-            </div>
+          <div className="inline-flex items-center justify-center glass border border-ieee-blue/20 px-6 py-3 rounded-2xl shadow-sm">
+            <img src="/ieee-logo.png" alt="IEEE Logo" className="h-14 sm:h-20 w-auto object-contain" />
           </div>
 
           <div className="space-y-2 pt-2">
@@ -119,7 +115,7 @@ export default function LandingPage() {
           </div>
 
           <Button type="submit" variant="primary" fullWidth isLoading={isSubmitting}>
-            Start Playing <FaRocket aria-hidden="true" className="inline" />
+            Start Playing
           </Button>
         </form>
 

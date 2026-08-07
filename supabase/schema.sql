@@ -16,6 +16,19 @@
 -- issue #4. RLS, the check constraint, the indexes, and the seed step are therefore documented
 -- here as the intended state, not re-verified by running this script against production.
 --
+-- After running this file in the SQL editor, run `node scripts/check-supabase.mjs` from the repo
+-- root — it re-probes the live project (read-only, plus one non-persisting RLS insert probe) and
+-- reports exactly what's still missing, in seconds, without dashboard access. Two things it
+-- cannot confirm remotely and still need a dashboard check: the time_present_iff_correct CHECK
+-- constraint, and the participants.name CHECK constraint (char_length(trim(name)) between 1 and
+-- 24) — an earlier version of this script tried to probe the name CHECK by sending an empty name
+-- and got HTTP 201 instead of a rejection, meaning that constraint was NOT present on the live
+-- project at the time and a real row persisted (id 00000000-0000-4000-8000-000000000001, empty
+-- name — delete it via `delete from participants where id =
+-- '00000000-0000-4000-8000-000000000001';` in the SQL editor once this file has been applied).
+-- There is no way to test a CHECK constraint over REST that is safe if the constraint turns out
+-- to be missing, so it isn't probed automatically anymore.
+--
 -- Run in the Supabase SQL editor. Idempotent-ish (guarded with IF NOT EXISTS / OR REPLACE) so it
 -- is safe to re-run against a project that already matches this file.
 
@@ -141,7 +154,20 @@ grant select on leaderboard_view to anon;
 --
 -- RLS with no matching SELECT policy returns `200 []` to an anon SELECT — identical, from
 -- outside, to a permissive policy on an empty table. Both participants and game_results are
--- currently empty, so the two cases are indistinguishable via a read-only HTTP probe. Confirm
--- this in the Supabase dashboard, or run `node scripts/verify-rls.mjs --i-will-clean-up` against
--- a NON-PRODUCTION project (it performs real inserts that the anon key cannot delete).
+-- currently empty, so the two cases are indistinguishable via a read-only HTTP probe in general.
+-- Confirm this in the Supabase dashboard, or run `node scripts/verify-rls.mjs --i-will-clean-up`
+-- against a NON-PRODUCTION project (it performs real inserts that the anon key cannot delete).
+--
+-- One data point already exists for THIS project specifically, as a side effect of the stray row
+-- mentioned above: a targeted `select id from participants where id = eq.<that row's id>` for a
+-- row known to exist still returned `200 []` to the anon key. That's real, if incidental,
+-- confirmation that anon SELECT on participants is denied here — not just table-emptiness
+-- ambiguity. game_results has no equivalent known row to test the same way.
+--
+-- Separately: as of the same check, anon INSERT was confirmed PERMITTED on both tables (an
+-- insert against game_results with a nonexistent participant_id was let through by RLS and only
+-- then rejected by the foreign key). That's a change from an earlier audit on issue #4, which
+-- recorded anon INSERT as denied (401, "new row violates row-level security policy"). Something
+-- about the live project's policies has changed since — worth flagging on the issue regardless
+-- of the stray row.
 -- ---------------------------------------------------------------------------

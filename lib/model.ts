@@ -4,8 +4,8 @@
  * Model swapped for issue #19 (FALLBACK — custom-trained small CNN, 18 classes) after
  * doodleNet (issue #3) couldn't reach acceptable real-drawing accuracy. Trained in Python
  * (tf_keras) on pre-rendered Quick, Draw! numpy_bitmap samples (12k/class), 94.5% validation
- * accuracy, exported with the tensorflowjs Python package. See scratchpad/train_py/ for the
- * training pipeline and training_report.txt for the run's numbers.
+ * accuracy, exported with the tensorflowjs Python package. See training/ for the training
+ * pipeline (#33) — train.py, export_tfjs.py, download_data.py, compare_models.mjs.
  *   - Input tensor: [1, 28, 28, 1], single grayscale channel.
  *   - Canvas is drawn black ink on white background (this project's convention).
  *   - Combined invert + normalize in one step: value = (255 - grayscale) / 255.
@@ -30,6 +30,11 @@
  *     otherwise visibly slow, and it would land mid-round.
  *   - Wrap every inference in tf.tidy() — a long stall session leaks GPU tensors without it.
  *   - Serve from public/model/, not a third-party URL. Flaky stall Wi-Fi is the design case.
+ *   - Backend fallback (issue #32): if TF.js doesn't land on webgl, this does NOT change
+ *     SAMPLE_INTERVAL_MS or any other behavior automatically — that's a bigger behavior change
+ *     than a same-day fix should risk. It logs a console warning and records the backend via
+ *     getBackend(), so a technical owner can diagnose a specific laggy phone during the event
+ *     instead of guessing.
  */
 import { MODEL_INPUT_SIZE } from "./constants";
 
@@ -56,10 +61,25 @@ const singleton: { model: any; tf: any; classNames: string[] | null } = {
 
 let loadState: ModelLoadState = "idle";
 let loadPromise: Promise<void> | null = null;
+let loadedBackend: string | null = null;
 
 /** Current load state, for a UI "warming up" hint on first visit. */
 export function getLoadState(): ModelLoadState {
   return loadState;
+}
+
+/**
+ * The TF.js backend actually selected at load time (issue #32), or null before load completes.
+ *
+ * Not surfaced in the UI — a phone silently landing on "cpu" still plays, just with visibly
+ * laggy predictions (SAMPLE_INTERVAL_MS is tuned for WebGL), and nobody at a carnival stall is
+ * watching devtools to know why. Logged instead so the technical owner can check a misbehaving
+ * phone's console during the event, and so #16's device pass can record which backend each test
+ * phone actually used. Deliberately not auto-degraded (e.g. widening the sample interval) — that
+ * is more behavior change than a same-day fix should risk; see the console warning below.
+ */
+export function getBackend(): string | null {
+  return loadedBackend;
 }
 
 /** True once the model is loaded, warmed, and ready to predict. */
@@ -97,6 +117,14 @@ export function loadModel(): Promise<void> {
         const dummy = tf.zeros([1, MODEL_INPUT_SIZE, MODEL_INPUT_SIZE, 1]);
         model.predict(dummy);
       });
+
+      loadedBackend = tf.getBackend();
+      if (loadedBackend !== "webgl") {
+        console.warn(
+          `[DoodleBot] TF.js backend is "${loadedBackend}", not webgl. Predictions will be ` +
+            `slower on this device — the guess strip may lag visibly behind drawing. (issue #32)`,
+        );
+      }
 
       loadState = "ready";
     } catch (err) {

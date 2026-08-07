@@ -32,7 +32,7 @@ export function ResultScreen({
       await new Promise((r) => setTimeout(r, 100));
       try {
         const board = await fetchLeaderboard();
-        const userRow = board.find((r) => r.participantId === participantId);
+        const userRow = board.rows.find((r) => r.participantId === participantId);
         if (isMounted && userRow) {
           setUserRank(userRow.rank);
         }
@@ -133,14 +133,14 @@ export function ResultScreen({
         {/* Buttons */}
         <div className="flex flex-col w-full space-y-3 relative z-10">
           <Button variant="primary" fullWidth onClick={onPlayAgain}>
-            Play Again <FaPalette aria-hidden="true" className="inline text-ieee-cyan" />
+            Play Again
           </Button>
 
           <Link
             href="/leaderboard"
             className="inline-flex min-h-[48px] w-full items-center justify-center rounded-xl px-6 py-3 text-base font-semibold border-2 border-ieee-blue text-ieee-blue hover:bg-ieee-blue/5 active:bg-ieee-blue/10 transition-all active:scale-[0.98] shadow-sm"
           >
-            View Leaderboard <FaTrophy aria-hidden="true" className="inline text-medal-gold" />
+            View Leaderboard
           </Link>
         </div>
       </div>

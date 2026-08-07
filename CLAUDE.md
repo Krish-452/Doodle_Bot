@@ -120,7 +120,7 @@ failure, and callers must not add their own retry.
 - Sample the canvas every **~400ms**, and only when strokes have changed since the last sample.
 - Wrap every inference in **`tf.tidy()`**. A long stall session leaks GPU memory without it.
 - Serve the model from `public/model/`, not a third-party URL. It must work on flaky stall Wi-Fi.
-- Win condition: target label in **top-1**, confidence **≥ 0.50**, sustained for **2 consecutive
+- Win condition: target label in **top-1**, confidence **≥ 0.25**, sustained for **2 consecutive
   samples**. The two-sample rule prevents unearned wins from mid-stroke confidence spikes.
 - Preprocessing polarity matters — Quick, Draw!–trained models expect **white ink on black**.
   Getting this backwards yields a model that runs fine and predicts nonsense.

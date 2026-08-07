@@ -5,7 +5,7 @@ import { LeaderboardClient } from "./LeaderboardClient";
 export const dynamic = "force-dynamic";
 
 export default async function LeaderboardPage() {
-  const initialLeaderboard = await fetchLeaderboard();
+  const initialSnapshot = await fetchLeaderboard();
 
-  return <LeaderboardClient initialLeaderboard={initialLeaderboard} />;
+  return <LeaderboardClient initialSnapshot={initialSnapshot} />;
 }

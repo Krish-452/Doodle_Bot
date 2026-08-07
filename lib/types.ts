@@ -61,6 +61,25 @@ export interface GameResultInput {
   timeTakenSeconds: number | null;
 }
 
+/**
+ * CONTRACT — data (E) → game/leaderboard consumers
+ *
+ * What fetchLeaderboard() returns (Issue #14). Bundling reachability with the rows is what lets
+ * the leaderboard page tell "connected, genuinely empty" apart from "can't reach Supabase, this
+ * is the local fallback" — both render zero rows, but only one of them is the board actually
+ * working. See lib/data.ts.
+ */
+export interface LeaderboardSnapshot {
+  rows: LeaderboardRow[];
+  /**
+   * "remote" — the leaderboard_view read succeeded, even if it returned zero rows.
+   * "local"  — the remote read failed; rows came from computeLocalLeaderboard() instead.
+   */
+  source: "remote" | "local";
+  /** Set when source is "local": why the remote read failed, for the status pill and logs. */
+  error: string | null;
+}
+
 /** One row of the aggregate leaderboard view. */
 export interface LeaderboardRow {
   /**

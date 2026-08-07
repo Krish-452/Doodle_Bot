@@ -127,7 +127,7 @@ perfectly and predicts nonsense.
 ### Win condition
 
 A round is won when the target word's accepted labels appear in the model's **top-1** with
-confidence **≥ 0.50**, sustained across **2 consecutive samples**.
+confidence **≥ 0.25**, sustained across **2 consecutive samples**.
 
 The two-sample requirement matters: single-frame confidence spikes are common mid-stroke and
 produce wins that feel unearned and random. Both thresholds are tunable constants — expect to
@@ -251,6 +251,14 @@ snake_case columns — no `rank` column; the client assigns rank (see `lib/data.
 | `best_time_seconds` | `numeric` \| `null` | `null` until the participant has a win |
 
 `word_records_view` is not implemented — it was always optional per this section.
+
+`fetchLeaderboard()` (`lib/data.ts`) wraps these rows in a `LeaderboardSnapshot` — `{ rows,
+source, error }` — rather than returning `LeaderboardRow[]` directly (Issue #14). `source` is
+`"remote"` when the `leaderboard_view` read itself succeeded, even with zero rows, and `"local"`
+when it failed and `rows` came from the on-device fallback instead. Without this, a genuinely
+empty leaderboard and an unreachable one render identically — the worst failure mode on a stall
+display, since nobody watching it can tell the difference. The leaderboard page uses `source` to
+show a connection-status pill and a distinct empty state for the unreachable case.
 
 Write to Supabase from **client components** using the anon key. Server-side routes would add a
 hop for no benefit and break the offline-queue behavior described below.

@@ -1,4 +1,4 @@
-import type { GameResultInput, LeaderboardRow } from "./types";
+import type { GameResultInput, LeaderboardRow, LeaderboardSnapshot } from "./types";
 import { getSupabaseClient } from "./supabase";
 import {
   RANKING_WEIGHT_GUESSES,
@@ -34,21 +34,27 @@ interface LocalResult {
 // createParticipant
 // ---------------------------------------------------------------------------
 
-/** Payload for participants INSERT. Only `name` is supplied by the client. */
+/** Payload for participants INSERT. The client generates `id` — see createParticipant below. */
 interface ParticipantInsert {
+  id: string;
   name: string;
 }
 
 /**
  * Inserts a new participant and returns their id.
  *
+ * The id is generated client-side with generateUuid() and sent explicitly in the INSERT, rather
+ * than reading it back with `.select().single()` (i.e. `RETURNING id`). Postgres evaluates a
+ * RETURNING clause under the table's SELECT policies, not its INSERT policies — and
+ * supabase/schema.sql (#4) deliberately grants anon no SELECT on `participants`. Chaining
+ * `.select()` here would make every insert fail even with the schema applied correctly.
+ *
  * Gameplay is fully client-side (CLAUDE.md), so a rejected or unreachable insert falls through
- * to a locally-generated UUID rather than throwing — a player must be able to start a round
- * offline. The two failure branches are logged separately (rather than the previous single
- * catch-all) because they have different downstream consequences: a local-UUID participant has
- * no matching `participants` row, so every later `submitResult` for this session will fail the
- * `game_results.participant_id` foreign key and be classified `db-error` — dropped, not queued
- * (see submitResult below). That is a known, accepted gap for the fully-offline case; see #12.
+ * to the local id rather than throwing — a player must be able to start a round offline.
+ * Generating the id up front (instead of only on failure) means the id is identical whichever
+ * path is taken: if the row insert fails now but a later submitResult retry or queue flush
+ * creates it via the FK-recovery path in attemptInsert, it lands under the same id the session
+ * has been using all along, instead of orphaning it under a second, never-persisted UUID.
  */
 export async function createParticipant(name: string): Promise<string> {
   const trimmed = name.trim();
@@ -56,18 +62,14 @@ export async function createParticipant(name: string): Promise<string> {
     throw new Error("Name cannot be empty");
   }
 
+  const id = generateUuid();
+  storeLocalParticipant(id, trimmed);
+
   try {
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase
+    const { error } = await supabase
       .from("participants")
-      .insert([{ name: trimmed } satisfies ParticipantInsert])
-      .select("id")
-      .single();
-
-    if (!error && data?.id) {
-      storeLocalParticipant(data.id, trimmed);
-      return data.id;
-    }
+      .insert([{ id, name: trimmed } satisfies ParticipantInsert]);
 
     if (error) {
       console.warn(
@@ -79,13 +81,7 @@ export async function createParticipant(name: string): Promise<string> {
     console.warn("createParticipant: Supabase unreachable, using local id instead:", err);
   }
 
-  const localId =
-    typeof crypto !== "undefined" && crypto.randomUUID
-      ? crypto.randomUUID()
-      : `user_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
-
-  storeLocalParticipant(localId, trimmed);
-  return localId;
+  return id;
 }
 
 function storeLocalParticipant(id: string, name: string) {
@@ -262,13 +258,19 @@ async function attemptInsert(result: GameResultInput): Promise<InsertOutcome> {
     return "network-error";
   }
 
-  // Handle FK or missing participant conflict (HTTP 409 / 400 or code 23503)
-  if (status === 409 || status === 400 || (error && error.code === "23503")) {
+  // Handle a missing participant row (HTTP 409, or Postgres FK violation 23503). A plain 400 is
+  // excluded on purpose — the most common 400 here is the time_present_iff_correct CHECK, which
+  // creating a participant row cannot fix, so retrying would just reproduce the same rejection.
+  if (status === 409 || (error && error.code === "23503")) {
     try {
       const name = getStoredParticipantName(result.participantId) || "Player";
+      // Plain insert, not upsert: an upsert's ON CONFLICT DO UPDATE path needs an UPDATE policy
+      // that anon does not have (see supabase/schema.sql — insert-only). This id has no row yet
+      // by construction (we're only here because the FK just failed), so insert is sufficient
+      // and doesn't require a policy #4 deliberately withholds.
       const { error: pErr } = await supabase
         .from("participants")
-        .upsert([{ id: result.participantId, name }], { onConflict: "id" });
+        .insert([{ id: result.participantId, name }]);
 
       if (!pErr) {
         const { error: retryErr } = await supabase
@@ -326,13 +328,14 @@ function writeQueue(queue: QueuedResult[]): void {
  * Returns a UUID v4 string without any external dependency.
  * Uses `crypto.randomUUID()` where available (all modern browsers, Node ≥ 14.17).
  * Falls back to a Math.random-based generator for environments where it is absent.
+ *
+ * Shared by createParticipant (the participant id, sent to the DB) and enqueue (the queueId,
+ * local-only). Neither use is a security token — the Math.random fallback path is fine for both.
  */
-function generateQueueId(): string {
+function generateUuid(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
   }
-  // Fallback — Math.random is not cryptographically strong, but the queueId is only used for
-  // local deduplication, not as a security token.
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     const r = (Math.random() * 16) | 0;
     return (c === "x" ? r : (r & 0x3) | 0x8).toString(16);
@@ -347,7 +350,7 @@ function generateQueueId(): string {
  */
 function enqueue(result: GameResultInput): void {
   const queue = readQueue();
-  queue.push({ queueId: generateQueueId(), result });
+  queue.push({ queueId: generateUuid(), result });
   writeQueue(queue);
 }
 
@@ -529,7 +532,23 @@ function isLeaderboardViewRow(row: unknown): row is LeaderboardViewRow {
   );
 }
 
-export async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
+/**
+ * Fetches the aggregate leaderboard, reporting whether it actually came from Supabase.
+ *
+ * The `source` field (Issue #14) exists because a remote read that returns zero rows and a
+ * remote read that *fails* both used to render identically — an empty board. At a stall, that's
+ * the worst available failure mode: a misconfigured or unreachable project looks exactly like a
+ * healthy one with no plays yet, and nobody watching it can tell. `source: "local"` plus `error`
+ * lets the caller (LeaderboardClient) show a status pill and a distinct empty state instead of
+ * silently reusing computeLocalLeaderboard()'s shape for both cases.
+ */
+export async function fetchLeaderboard(): Promise<LeaderboardSnapshot> {
+  const local = (error: string): LeaderboardSnapshot => ({
+    rows: computeLocalLeaderboard(),
+    source: "local",
+    error,
+  });
+
   try {
     const supabase = getSupabaseClient();
     // Explicit column list rather than `*`: if the view is ever reshaped this fails loudly
@@ -542,43 +561,43 @@ export async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
       // Logged, not swallowed — a silent fallback to local data is what hid the shape
       // mismatch here in the first place.
       console.warn("leaderboard_view query failed, using local leaderboard:", error.message);
-    } else if (data) {
-      // Trust a successful query regardless of row count (Issue #14). Previously this required
-      // `data.length > 0`, so a genuinely empty remote board fell through to
-      // computeLocalLeaderboard() — indistinguishable, on screen, from "the query failed" or
-      // "the project isn't configured". That's the worst failure mode at a stall: a
-      // misconfigured or freshly-reset project renders what looks like a working board, showing
-      // only the one phone's own history, and nobody watching it can tell. A real zero-row
-      // response now returns [] and the actual empty state renders.
-      const validRows = data.filter(isLeaderboardViewRow);
-      if (validRows.length < data.length) {
-        // Not thrown — one malformed row shouldn't take down the whole board — but loud,
-        // because this means the view's shape drifted from what this file expects.
-        console.warn(
-          `leaderboard_view: dropped ${data.length - validRows.length} row(s) missing participant_id/name. View shape may have changed — see docs/02-architecture.md § 7.`,
-        );
-      }
-      const rows = validRows.map((row) => ({
-        participantId: row.participant_id,
-        name: row.name,
-        score: toNumber(row.score),
-        successfulGuesses: toNumber(row.successful_guesses),
-        gamesPlayed: toNumber(row.total_games),
-        bestTimeSeconds: toNullableNumber(row.best_time_seconds),
-      }));
-      // The view has no rank column and a bare select has no ordering guarantee, so rank is
-      // assigned here using the same comparator as the offline path.
-      return sortAndRank(rows);
-    } else {
+      return local(error.message);
+    }
+
+    if (!data) {
       // No error, but no data either — PostgREST shouldn't produce this on a successful select,
       // but fall back rather than trust an absent response.
       console.warn("leaderboard_view query returned no data and no error — using local leaderboard.");
+      return local("leaderboard_view returned no data");
     }
+
+    // Trust a successful query regardless of row count (Issue #14). Previously this required
+    // `data.length > 0`, so a genuinely empty remote board fell through to
+    // computeLocalLeaderboard() with no way to tell it apart from a failure. A real zero-row
+    // response now reports source: "remote" and the actual empty state renders.
+    const validRows = data.filter(isLeaderboardViewRow);
+    if (validRows.length < data.length) {
+      // Not thrown — one malformed row shouldn't take down the whole board — but loud,
+      // because this means the view's shape drifted from what this file expects.
+      console.warn(
+        `leaderboard_view: dropped ${data.length - validRows.length} row(s) missing participant_id/name. View shape may have changed — see docs/02-architecture.md § 7.`,
+      );
+    }
+    const rows = validRows.map((row) => ({
+      participantId: row.participant_id,
+      name: row.name,
+      score: toNumber(row.score),
+      successfulGuesses: toNumber(row.successful_guesses),
+      gamesPlayed: toNumber(row.total_games),
+      bestTimeSeconds: toNullableNumber(row.best_time_seconds),
+    }));
+    // The view has no rank column and a bare select has no ordering guarantee, so rank is
+    // assigned here using the same comparator as the offline path.
+    return { rows: sortAndRank(rows), source: "remote", error: null };
   } catch (err) {
     console.warn("Supabase unreachable, using local leaderboard:", err);
+    return local(err instanceof Error ? err.message : String(err));
   }
-
-  return computeLocalLeaderboard();
 }
 
 /** A leaderboard row before rank has been assigned. */

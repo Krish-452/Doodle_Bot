@@ -472,8 +472,7 @@ export const DrawingCanvas = forwardRef<CanvasHandle, DrawingCanvasProps>(
                     : "text-ink-muted hover:text-ink"
                 }`}
               >
-                <span>🖌️</span>
-                <span className="hidden xs:inline">Brush</span>
+                <span>Brush</span>
               </button>
 
               <button
@@ -487,8 +486,7 @@ export const DrawingCanvas = forwardRef<CanvasHandle, DrawingCanvasProps>(
                     : "text-ink-muted hover:text-ink"
                 }`}
               >
-                <span>🪣</span>
-                <span className="hidden xs:inline">Fill</span>
+                <span>Fill</span>
               </button>
             </div>
 
@@ -555,9 +553,6 @@ export const DrawingCanvas = forwardRef<CanvasHandle, DrawingCanvasProps>(
                   disabled={disabled}
                   className="opacity-0 absolute inset-0 w-full h-full cursor-pointer"
                 />
-                {PRESET_COLORS.includes(activeColor) && (
-                  <span className="text-[10px]">🎨</span>
-                )}
               </label>
             </div>
           </div>
@@ -570,7 +565,6 @@ export const DrawingCanvas = forwardRef<CanvasHandle, DrawingCanvasProps>(
               disabled={!canUndo || disabled}
               className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-ink bg-white hover:bg-surface-muted border-2 border-surface-muted rounded-xl disabled:opacity-40 transition-all active:scale-95 shadow-xs"
             >
-              <span>↩️</span>
               <span>Undo</span>
             </button>
 
@@ -583,7 +577,6 @@ export const DrawingCanvas = forwardRef<CanvasHandle, DrawingCanvasProps>(
               disabled={disabled}
               className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-urgent bg-urgent/10 hover:bg-urgent/20 border-2 border-urgent/20 rounded-xl disabled:opacity-40 transition-all active:scale-95 shadow-xs"
             >
-              <span>🗑️</span>
               <span>Clear</span>
             </button>
           </div>

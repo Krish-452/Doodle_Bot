@@ -18,7 +18,7 @@ export const WORDS_PER_ROUND = 3;
 export const SAMPLE_INTERVAL_MS = 400;
 
 /** Win condition, part one: the target's label is top-1 at or above this confidence. */
-export const CONFIDENCE_THRESHOLD = 0.5;
+export const CONFIDENCE_THRESHOLD = 0.25;
 
 /**
  * Win condition, part two: sustained across this many consecutive samples. Single-frame

@@ -2,14 +2,18 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { RESULT_QUEUE_STORAGE_KEY } from "./constants";
 
 /**
- * Exercises two things without a live Supabase project:
+ * Exercises three things without a live Supabase project:
  *
  *  - Issue #12's offline retry queue: submitResult enqueues on a network failure, flushes on the
  *    next successful submit and on the window "online" event, and an overlapping double flush
  *    does not double-submit a queued round.
- *  - Issue #14's empty-vs-unreachable fix: fetchLeaderboard trusts a real zero-row remote
- *    response instead of silently falling back to local data, and still falls back when the
- *    remote query actually fails.
+ *  - Issue #14's empty-vs-unreachable fix: fetchLeaderboard reports source: "remote" on a real
+ *    zero-row response instead of silently falling back to local data, and source: "local" (with
+ *    the failure reason) when the remote query actually fails.
+ *  - Issue #4's RLS fix: createParticipant sends a client-generated id and never chains .select()
+ *    on the insert — RETURNING evaluates under SELECT policies, which anon doesn't have on
+ *    participants — and returns that same id whether or not the remote insert succeeds, so a
+ *    session never gets orphaned under a second, never-persisted id.
  *
  * No jsdom, no vitest.config.ts — lib/data.ts only touches `window`/`localStorage` through the
  * bare global identifiers (never `document` or any other DOM API), so two minimal stubs are
@@ -22,20 +26,36 @@ import { RESULT_QUEUE_STORAGE_KEY } from "./constants";
 
 const mockState = vi.hoisted(() => ({
   insertCalls: [] as unknown[],
+  /** Set if any test's code chains .select() onto an insert() — see selectCalledOnInsert below. */
+  selectCalledOnInsert: false,
   /** What the next (and subsequent, until changed) mocked insert() call resolves to. */
-  nextResult: { error: null as { message: string } | null, status: 201 },
+  nextResult: { error: null as { message: string; code?: string } | null, status: 201 },
   /** What the next mocked leaderboard_view select() call resolves to. */
   nextSelectResult: { data: null as unknown[] | null, error: null as { message: string } | null },
 }));
 
 vi.mock("./supabase", () => ({
   getSupabaseClient: () => ({
-    // Table name isn't needed — this mock's insert() is only ever called on game_results and
-    // its select() only ever on leaderboard_view (see attemptInsert / fetchLeaderboard).
+    // Table name isn't needed — every insert() call in lib/data.ts (game_results and, since #4,
+    // participants) shares nextResult, and every select() call is on leaderboard_view.
     from: () => ({
-      insert: async (payload: unknown) => {
+      // insert() returns a thenable that is ALSO chainable via .select(), the same shape
+      // @supabase/postgrest-js's real builder has. That's what lets a test prove createParticipant
+      // never chains .select() onto its insert (see the RLS/RETURNING comment above) — a stray
+      // `.select()` would flip selectCalledOnInsert, which a plain `insert: async () => ...` mock
+      // couldn't have caught: it never expose a .select() method to call in the first place.
+      insert: (payload: unknown) => {
         mockState.insertCalls.push(payload);
-        return { error: mockState.nextResult.error, status: mockState.nextResult.status };
+        const result = { error: mockState.nextResult.error, status: mockState.nextResult.status };
+        return {
+          then(resolve: (value: typeof result) => void) {
+            resolve(result);
+          },
+          select() {
+            mockState.selectCalledOnInsert = true;
+            return { single: async () => ({ data: null, error: mockState.nextResult.error }) };
+          },
+        };
       },
       select: async () => mockState.nextSelectResult,
     }),
@@ -66,9 +86,10 @@ const windowStub = new EventTarget();
 
 let submitResult: typeof import("./data").submitResult;
 let fetchLeaderboard: typeof import("./data").fetchLeaderboard;
+let createParticipant: typeof import("./data").createParticipant;
 
 beforeAll(async () => {
-  ({ submitResult, fetchLeaderboard } = await import("./data"));
+  ({ submitResult, fetchLeaderboard, createParticipant } = await import("./data"));
 });
 
 function readQueueLength(): number {
@@ -94,8 +115,42 @@ const sampleResult = {
 beforeEach(() => {
   memoryStorage.clear();
   mockState.insertCalls.length = 0;
+  mockState.selectCalledOnInsert = false;
   mockState.nextResult = { error: null, status: 201 };
   mockState.nextSelectResult = { data: null, error: null };
+});
+
+describe("createParticipant (Issue #4)", () => {
+  it("sends a client-generated id and never chains .select() onto the insert", async () => {
+    mockState.nextResult = { error: null, status: 201 };
+
+    const id = await createParticipant("Test Player");
+
+    expect(mockState.insertCalls).toHaveLength(1);
+    expect(mockState.insertCalls[0]).toEqual([{ id, name: "Test Player" }]);
+    // The real bug this guards against: `.insert(...).select("id").single()` compiles to
+    // `INSERT ... RETURNING id`, which Postgres evaluates under SELECT policies — and anon has
+    // none on participants (supabase/schema.sql, Issue #4). A .select() call here would have
+    // made every participant creation fail even with the schema applied correctly.
+    expect(mockState.selectCalledOnInsert).toBe(false);
+    expect(id).toBeTruthy();
+  });
+
+  it("returns the same id whether or not the remote insert succeeds, so a later retry can't orphan the session", async () => {
+    mockState.nextResult = {
+      error: { message: "new row violates row-level security policy", code: "42501" },
+      status: 401,
+    };
+
+    const id = await createParticipant("Test Player");
+
+    expect(mockState.insertCalls).toHaveLength(1);
+    // Same id sent in the (rejected) insert as the one returned to the caller — previously a
+    // rejected insert generated a second, different local-only id, so any later attemptInsert
+    // retry for this session would fail the participant_id foreign key forever.
+    expect(mockState.insertCalls[0]).toEqual([{ id, name: "Test Player" }]);
+    expect(id).toBeTruthy();
+  });
 });
 
 describe("submitResult offline queue (Issue #12)", () => {
@@ -176,26 +231,30 @@ describe("submitResult offline queue (Issue #12)", () => {
 });
 
 describe("fetchLeaderboard: empty vs unreachable (Issue #14)", () => {
-  it("returns a real empty board when the remote query succeeds with zero rows, not the local fallback", async () => {
+  it("reports source: 'remote' and empty rows when the remote query succeeds with zero rows, not the local fallback", async () => {
     // Populate local data first (submitResult always writes locally, regardless of the mocked
     // remote outcome), so a wrongful fallback to it would be detectable below.
     await submitResult(sampleResult);
 
     mockState.nextSelectResult = { data: [], error: null };
-    const rows = await fetchLeaderboard();
+    const snapshot = await fetchLeaderboard();
 
     // Before the fix, `data.length > 0` being false sent this straight to
     // computeLocalLeaderboard(), which would have returned the row seeded above instead of [].
-    expect(rows).toEqual([]);
+    expect(snapshot.source).toBe("remote");
+    expect(snapshot.error).toBeNull();
+    expect(snapshot.rows).toEqual([]);
   });
 
-  it("falls back to local data when the remote query actually fails", async () => {
+  it("reports source: 'local' with the failure reason when the remote query actually fails", async () => {
     await submitResult(sampleResult); // seeds local data
 
     mockState.nextSelectResult = { data: null, error: { message: "relation does not exist" } };
-    const rows = await fetchLeaderboard();
+    const snapshot = await fetchLeaderboard();
 
-    expect(rows.length).toBeGreaterThan(0);
-    expect(rows[0].participantId).toBe(sampleResult.participantId);
+    expect(snapshot.source).toBe("local");
+    expect(snapshot.error).toBe("relation does not exist");
+    expect(snapshot.rows.length).toBeGreaterThan(0);
+    expect(snapshot.rows[0].participantId).toBe(sampleResult.participantId);
   });
 });
