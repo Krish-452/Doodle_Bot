@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=Fredoka:wght@400;500;600;700&display=swap');
 @import "tailwindcss";
 
 /*
@@ -33,6 +33,13 @@
   --color-ieee-cyan: #00b5e2;
   --color-ieee-cyan-light: #4fd9ff;
 
+  /* Fun palette — playful accent colors for a game feel */
+  --color-fun-yellow: #FFD93D;
+  --color-fun-orange: #FF8C42;
+  --color-fun-pink: #FF6B9D;
+  --color-fun-green: #6BCB77;
+  --color-fun-purple: #9B59B6;
+  --color-fun-coral: #FF6F61;
 
   /* Surfaces */
   --color-surface: #ffffff;
@@ -54,6 +61,7 @@
 
   /* Type */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'Fredoka', var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 
   /* Stall-display scale — leaderboard only. The landscape layout is deferred; the tokens stay
      so it can be picked up without re-deriving the scale. */
@@ -90,6 +98,12 @@ body {
   backdrop-filter: blur(8px);
 }
 
+/* Fun doodle-style dotted background pattern */
+@utility doodle-bg {
+  background-image: radial-gradient(circle, #e0e7ef 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
 @keyframes fadeIn {
   from {
     opacity: 0;
@@ -105,3 +119,87 @@ body {
   animation: fadeIn 0.2s ease-out forwards;
 }
 
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@utility animate-slide-up {
+  animation: slideUp 0.35s ease-out forwards;
+}
+
+@keyframes scalePop {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.08);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@utility animate-scale-pop {
+  animation: scalePop 0.4s ease-out forwards;
+}
+
+@keyframes pulseSoft {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@utility animate-pulse-soft {
+  animation: pulseSoft 1.5s ease-in-out infinite;
+}
+
+@keyframes countdownRing {
+  from {
+    stroke-dashoffset: 0;
+  }
+  to {
+    stroke-dashoffset: 283;
+  }
+}
+
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-6deg); }
+  75% { transform: rotate(6deg); }
+}
+
+@utility animate-wiggle {
+  animation: wiggle 0.6s ease-in-out;
+}
+
+@keyframes confettiFall {
+  0% {
+    transform: translateY(-20px) rotate(0deg);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(60px) rotate(360deg);
+    opacity: 0;
+  }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-6px); }
+}
+
+@utility animate-float {
+  animation: float 2s ease-in-out infinite;
+}

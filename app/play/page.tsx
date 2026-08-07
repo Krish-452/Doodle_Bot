@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { ScreenShell } from "../../components/ScreenShell";
 import { WordSelector } from "../../components/WordSelector";
@@ -39,6 +39,29 @@ export default function PlayPage() {
   const canvasRef = useRef<CanvasHandle | null>(null);
   const roundStartTimeRef = useRef<number | null>(null);
   const guessStateRef = useRef<GuessState>(INITIAL_GUESS_STATE);
+
+  // Random sized decorative background dots OUTSIDE the canvas
+  const bgDots = useMemo(() => {
+    const colors = [
+      "#FFD93D",
+      "#FF8C42",
+      "#FF6B9D",
+      "#6BCB77",
+      "#9B59B6",
+      "#4fd9ff",
+      "#00629b",
+      "#FF6F61",
+    ];
+    return Array.from({ length: 28 }).map((_, i) => ({
+      id: i,
+      left: `${Math.floor(Math.random() * 92) + 4}%`,
+      top: `${Math.floor(Math.random() * 92) + 4}%`,
+      size: `${Math.floor(Math.random() * 28) + 10}px`,
+      color: colors[i % colors.length],
+      opacity: (Math.random() * 0.4 + 0.25).toFixed(2),
+      delay: `${(Math.random() * 3.5).toFixed(1)}s`,
+    }));
+  }, []);
 
   // 1. Session check & Model loading on mount
   useEffect(() => {
@@ -124,8 +147,7 @@ export default function PlayPage() {
     handleEndRound(true);
   }, [handleEndRound]);
 
-  // Erasing the canvas erases the evidence behind the current guess too - the "AI thinks"
-  // strip and streak must not linger on strokes that no longer exist.
+  // Erasing the canvas erases the evidence behind the current guess too
   const handleCanvasClear = useCallback(() => {
     setGuessState(INITIAL_GUESS_STATE);
     guessStateRef.current = INITIAL_GUESS_STATE;
@@ -169,43 +191,62 @@ export default function PlayPage() {
 
   return (
     <ScreenShell showLogo={true}>
-      <div className="flex flex-1 flex-col h-[calc(100dvh-57px)] p-4 max-w-lg lg:max-w-6xl mx-auto w-full">
+      <div className="relative flex flex-1 flex-col h-[calc(100dvh-57px)] p-4 max-w-lg lg:max-w-6xl mx-auto w-full doodle-bg overflow-hidden">
+
+        {/* Random sized decorative dots OUTSIDE the canvas */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
+          {bgDots.map((dot) => (
+            <div
+              key={dot.id}
+              className="absolute rounded-full animate-float"
+              style={{
+                left: dot.left,
+                top: dot.top,
+                width: dot.size,
+                height: dot.size,
+                backgroundColor: dot.color,
+                opacity: dot.opacity,
+                animationDelay: dot.delay,
+              }}
+            />
+          ))}
+        </div>
+
         {/* Header Strip with target word & timer (Mobile portrait only) */}
-        {phase === "drawing" && selectedWord && (
-          <div className="flex lg:hidden items-center justify-between pb-3">
+        {(phase === "drawing" || phase === "result") && selectedWord && (
+          <div className="relative z-10 flex lg:hidden items-center justify-between pb-3">
             <div className="flex items-center gap-2">
-              <span className="text-xs font-semibold text-ink-muted">Target:</span>
-              <span className="text-lg font-extrabold capitalize text-ieee-blue">
+              <span className="text-lg">🎯</span>
+              <span
+                className="text-lg font-bold capitalize text-ink"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
                 {selectedWord.id}
               </span>
             </div>
 
             <div
-              className={`flex items-center gap-1 font-mono text-lg font-bold px-3 py-1 rounded-lg border ${
+              className={`flex items-center gap-1.5 font-mono text-lg font-bold px-3 py-1.5 rounded-xl border-2 ${
                 timeLeft <= 5
-                  ? "text-urgent border-urgent/30 bg-urgent/10"
-                  : "text-ink border-surface-muted bg-surface-muted"
+                  ? "text-fun-coral border-fun-coral/40 bg-fun-coral/10 animate-pulse"
+                  : "text-ink border-fun-yellow/40 bg-fun-yellow/10"
               }`}
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
+              <span>⏱️</span>
               <span>{timeLeft}s</span>
             </div>
           </div>
         )}
 
-        {/* State 1: Word Selection */}
+        {/* State 1: Word Selection Modal */}
         {phase === "word-select" && (
-          <div className="flex-1 flex flex-col justify-center max-w-md lg:max-w-xl mx-auto w-full">
+          <>
             {isModelLoading && (
-              <div className="text-center py-2 text-xs font-semibold text-ieee-blue animate-pulse mb-2">
-                Loading AI Recognition Model...
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-surface/80 backdrop-blur-sm">
+                <div className="text-center space-y-3 animate-pulse">
+                  <span className="text-5xl block animate-float">🤖</span>
+                  <p className="text-sm font-bold text-ieee-blue">Warming up AI brain...</p>
+                </div>
               </div>
             )}
             <WordSelector
@@ -213,7 +254,7 @@ export default function PlayPage() {
               onSelect={handleSelectWord}
               disabled={isModelLoading || !isModelReady()}
             />
-          </div>
+          </>
         )}
 
         {/* State 2: Countdown Overlay */}
@@ -221,47 +262,44 @@ export default function PlayPage() {
           <CountdownOverlay word={selectedWord} onComplete={handleCountdownComplete} />
         )}
 
-        {/* State 3: Drawing Canvas & Live Guessing */}
-        {/* Responsive Grid: Below lg: single column stacked. lg: 2-column layout (Canvas Left, Controls Right) */}
-        <div className={`flex-1 flex-col lg:flex-row lg:grid lg:grid-cols-12 lg:gap-8 min-h-0 ${phase === "drawing" ? "flex lg:grid" : "hidden"}`}>
+        {/* State 3 & 4: Drawing Canvas & Live Guessing */}
+        {/* Canvas stays visible during result phase so drawing is visible behind modal */}
+        <div className={`relative z-10 flex-1 flex-col lg:flex-row lg:grid lg:grid-cols-12 lg:gap-6 min-h-0 ${(phase === "drawing" || phase === "result") ? "flex lg:grid" : "hidden"}`}>
 
-          {/* Left Column (Desktop): Canvas Area (col-span-9 at lg, col-span-10 at xl) */}
-          <div className="relative w-full aspect-square lg:col-span-9 xl:col-span-10">
-            <DrawingCanvas ref={canvasRef} onClear={handleCanvasClear} />
+          {/* Left Column: Drawing Canvas */}
+          <div className="flex-1 flex flex-col min-h-0 lg:col-span-8 h-full">
+            <DrawingCanvas ref={canvasRef} disabled={phase === "result"} onClear={handleCanvasClear} />
           </div>
 
-          {/* Right Rail (Desktop): Word Prompt, Timer, Live Guess Strip (lg:col-span-3, xl:col-span-2) */}
-          <div className="lg:col-span-3 xl:col-span-2 flex flex-col justify-between space-y-4 pt-3 lg:pt-0 bg-white/80 backdrop-blur-sm rounded-2xl border border-ieee-blue/20 shadow-lg">
+          {/* Right Rail: Target, Timer, Live AI Guess */}
+          <div className="lg:col-span-4 flex flex-col gap-4 pt-3 lg:pt-0 overflow-hidden">
             {/* Desktop Target & Timer Panel */}
-            <div className="hidden lg:flex flex-col space-y-3 bg-white p-5 rounded-2xl border border-ieee-blue/20 shadow-xs">
-              <div className="flex items-center justify-between border-b border-surface-muted pb-3">
-                <span className="text-xs font-bold text-ink-muted uppercase tracking-wider">Your Target</span>
-                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-ieee-blue/10 text-ieee-blue border border-ieee-blue/20 uppercase">
+            <div className="hidden lg:flex flex-col space-y-3 p-5 rounded-2xl bg-white/90 backdrop-blur-sm border-2 border-fun-yellow/30 shadow-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-bold text-ink-muted flex items-center gap-1.5">
+                  🎯 Draw this!
+                </span>
+                <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-surface-muted text-ink-muted border border-surface-muted uppercase">
                   {selectedWord?.difficulty}
                 </span>
               </div>
-              <div className="text-center py-1">
-                <span className="text-3xl font-black capitalize text-ieee-blue tracking-tight">
+              <div className="text-center py-2">
+                <span
+                  className="text-4xl font-bold capitalize text-ink tracking-tight"
+                  style={{ fontFamily: "var(--font-display)" }}
+                >
                   {selectedWord?.id}
                 </span>
               </div>
               <div className="flex items-center justify-between pt-2 border-t border-surface-muted">
-                <span className="text-xs font-semibold text-ink-muted">Time Remaining</span>
+                <span className="text-xs font-semibold text-ink-muted">⏱️ Time left</span>
                 <div
-                  className={`flex items-center gap-1.5 font-mono text-xl font-black px-3 py-1 rounded-lg border ${
+                  className={`flex items-center gap-1.5 font-mono text-2xl font-black px-4 py-1.5 rounded-xl border-2 ${
                     timeLeft <= 5
-                      ? "text-urgent border-urgent/30 bg-urgent/10"
-                      : "text-ink border-surface-muted bg-surface-muted"
+                      ? "text-fun-coral border-fun-coral/40 bg-fun-coral/10 animate-pulse"
+                      : "text-ink border-fun-green/40 bg-fun-green/10"
                   }`}
                 >
-                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
                   <span>{timeLeft}s</span>
                 </div>
               </div>
@@ -276,32 +314,29 @@ export default function PlayPage() {
               />
             </div>
 
-            {/* Desktop Brand / Volunteer note */}
-            <div className="hidden lg:block bg-ieee-blue/5 border border-ieee-blue/15 rounded-2xl p-4 text-xs text-ink-muted space-y-1">
-              <div className="flex items-center gap-1.5 font-bold text-ieee-blue">
-                <span>IEEE DoodleBot AI Engine</span>
-                <span className="text-ieee-cyan">•</span>
-                <span className="text-[10px] bg-white px-1.5 py-0.5 rounded border border-ieee-blue/20">Live</span>
+            {/* Desktop AI info banner */}
+            <div className="hidden lg:flex flex-col gap-2 p-4 rounded-2xl bg-white/80 border border-fun-purple/20 text-xs text-ink-muted shadow-xs">
+              <div className="flex items-center gap-1.5 font-bold text-fun-purple">
+                <span>🤖 AI is watching</span>
+                <span className="text-[10px] bg-fun-green/20 text-fun-green px-1.5 py-0.5 rounded-full border border-fun-green/30 font-bold">LIVE</span>
               </div>
               <p>
-                Our real-time neural network crops your drawing area to a square tensor and evaluates top match probabilities continuously.
+                The AI model is analyzing your sketch in real-time! Draw clearly to beat the clock.
               </p>
             </div>
           </div>
         </div>
 
-        {/* State 4: Results */}
+        {/* State 4: Results — Modal overlay rendered ON TOP of the canvas */}
         {phase === "result" && selectedWord && (
-          <div className="flex-1 flex flex-col justify-center max-w-md lg:max-w-xl mx-auto w-full">
-            <ResultScreen
-              won={guessState.won}
-              word={selectedWord.id}
-              timeTakenSeconds={finalTimeSeconds}
-              participantId={session.participantId}
-              participantName={session.name}
-              onPlayAgain={handlePlayAgain}
-            />
-          </div>
+          <ResultScreen
+            won={guessState.won}
+            word={selectedWord.id}
+            timeTakenSeconds={finalTimeSeconds}
+            participantId={session.participantId}
+            participantName={session.name}
+            onPlayAgain={handlePlayAgain}
+          />
         )}
 
       </div>

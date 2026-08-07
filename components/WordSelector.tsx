@@ -2,7 +2,6 @@
 
 import React from "react";
 import type { Word } from "../lib/types";
-import { Card } from "./Card";
 
 interface WordSelectorProps {
   words: Word[];
@@ -10,55 +9,60 @@ interface WordSelectorProps {
   disabled?: boolean;
 }
 
+const WORD_EMOJIS: Record<string, string> = {
+  easy: "🟢",
+  medium: "🟡",
+  hard: "🔴",
+};
+
+const CARD_COLORS = [
+  "from-fun-yellow/25 to-fun-orange/15 border-fun-orange/40 hover:border-fun-orange/80 hover:shadow-fun-orange/20",
+  "from-fun-pink/25 to-fun-purple/15 border-fun-pink/40 hover:border-fun-pink/80 hover:shadow-fun-pink/20",
+  "from-fun-green/25 to-ieee-cyan-light/15 border-fun-green/40 hover:border-fun-green/80 hover:shadow-fun-green/20",
+];
+
 export function WordSelector({ words, onSelect, disabled = false }: WordSelectorProps) {
-  const getDifficultyColor = (diff: string) => {
-    switch (diff) {
-      case "easy":
-        return "bg-win/10 text-win border-win/20";
-      case "medium":
-        return "bg-ieee-blue/10 text-ieee-blue border-ieee-blue/20";
-      case "hard":
-        return "bg-urgent/10 text-urgent border-urgent/20";
-      default:
-        return "bg-surface-muted text-ink-muted";
-    }
-  };
-
   return (
-    <div className="flex flex-col w-full max-w-md mx-auto space-y-4 py-4">
-      <div className="text-center space-y-1">
-        <h2 className="text-2xl font-bold text-ink">Choose a Word</h2>
-        <p className="text-sm text-ink-muted">
-          {disabled ? "Waiting for AI model to load..." : "Tap any card to lock in your choice"}
-        </p>
-      </div>
+    <div className="fixed inset-0 z-40 flex items-center justify-center bg-ink/40 backdrop-blur-sm animate-fade-in p-4">
+      <div className="flex flex-col w-full max-w-md mx-auto space-y-5 p-6 sm:p-8 bg-white rounded-3xl shadow-2xl animate-slide-up border-4 border-fun-yellow/40">
 
-      <div className="grid grid-cols-1 gap-4 pt-2">
-        {words.map((word) => (
-          <Card
-            key={word.id}
-            interactive={!disabled}
-            onClick={() => {
-              if (!disabled) onSelect(word);
-            }}
-            className={`flex items-center justify-between p-6 transition-all ${
-              disabled ? "opacity-50 pointer-events-none bg-surface-muted" : "hover:border-ieee-blue group"
-            }`}
-          >
-            <span className="text-2xl font-bold capitalize text-ink group-hover:text-ieee-blue transition-colors">
-              {word.id}
-            </span>
-            <span
-              className={`text-xs font-semibold px-3 py-1 rounded-full uppercase tracking-wider border ${getDifficultyColor(
-                word.difficulty
-              )}`}
+        {/* Fun header */}
+        <div className="text-center space-y-2">
+          <div className="text-4xl animate-wiggle">✏️</div>
+          <h2 className="text-3xl font-bold text-ink" style={{ fontFamily: "var(--font-display)" }}>
+            Pick a word!
+          </h2>
+          <p className="text-sm font-semibold text-ink-muted">
+            {disabled ? "⏳ Warming up the AI brain..." : "What do you want to doodle?"}
+          </p>
+        </div>
+
+        {/* Word cards */}
+        <div className="grid grid-cols-1 gap-3.5">
+          {words.map((word, i) => (
+            <button
+              key={word.id}
+              disabled={disabled}
+              onClick={() => onSelect(word)}
+              className={`flex items-center justify-between p-5 rounded-2xl border-2 bg-gradient-to-r
+                transition-all duration-200 cursor-pointer shadow-sm
+                hover:scale-[1.02] hover:shadow-md active:scale-[0.98]
+                disabled:opacity-50 disabled:pointer-events-none disabled:hover:scale-100
+                ${CARD_COLORS[i % CARD_COLORS.length]}`}
             >
-              {word.difficulty}
-            </span>
-          </Card>
-        ))}
+              <span
+                className="text-2xl font-bold capitalize text-ink"
+                style={{ fontFamily: "var(--font-display)" }}
+              >
+                {word.id}
+              </span>
+              <span className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-ink-muted bg-white/80 px-3 py-1 rounded-full border border-surface-muted">
+                {WORD_EMOJIS[word.difficulty] || "⚪"} {word.difficulty}
+              </span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
-

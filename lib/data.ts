@@ -122,13 +122,27 @@ interface GameResultInsert {
 }
 
 function toInsertPayload(result: GameResultInput): GameResultInsert {
+  const isCorrect = Boolean(result.correct);
+  let timeTaken: number | null = null;
+  if (isCorrect) {
+    if (
+      typeof result.timeTakenSeconds === "number" &&
+      !isNaN(result.timeTakenSeconds) &&
+      result.timeTakenSeconds > 0
+    ) {
+      timeTaken = Number(result.timeTakenSeconds.toFixed(2));
+    } else {
+      timeTaken = 0.5;
+    }
+  }
   return {
     participant_id: result.participantId,
     word: result.word,
-    correct: result.correct,
-    time_taken_seconds: result.timeTakenSeconds,
+    correct: isCorrect,
+    time_taken_seconds: timeTaken,
   };
 }
+
 
 /**
  * An item held in the localStorage offline queue.
@@ -220,30 +234,60 @@ type InsertOutcome = "success" | "network-error" | "db-error";
  *       NOT a PostgrestError instance. It has no `status` property of its own — `status`
  *       is a top-level field on the response, not inside `error`.
  */
+function getStoredParticipantName(participantId: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const existing: Record<string, string> = JSON.parse(
+      localStorage.getItem(LOCAL_PARTICIPANTS_KEY) || "{}"
+    );
+    return existing[participantId] || null;
+  } catch {
+    return null;
+  }
+}
+
 async function attemptInsert(result: GameResultInput): Promise<InsertOutcome> {
-  // We do not use .select() here — a bare INSERT returns 204 No Content on success, which is
-  // all we need. Using .select() would require the RLS policy to also grant SELECT, which the
-  // architecture explicitly disallows for anon on game_results.
-  const { error, status } = await getSupabaseClient()
+  const payload = toInsertPayload(result);
+  const supabase = getSupabaseClient();
+
+  const { error, status } = await supabase
     .from("game_results")
-    .insert(toInsertPayload(result));
+    .insert(payload);
 
   if (!error) {
-    // status 201 (Created) or 204 (No Content) — row was accepted.
     return "success";
   }
 
   if (status === 0) {
-    // status 0 means the fetch never got an HTTP response: the device is offline, the DNS
-    // lookup failed, or the connection was refused. Queue and continue gameplay.
     return "network-error";
   }
 
-  // Any non-zero status with an error object is a real HTTP error (4xx / 5xx) from PostgREST
-  // or the DB. Log it for the developer; do not queue.
-  console.error(`[DoodleBot] game_results INSERT rejected (HTTP ${status}):`, error);
+  // Handle FK or missing participant conflict (HTTP 409 / 400 or code 23503)
+  if (status === 409 || status === 400 || (error && error.code === "23503")) {
+    try {
+      const name = getStoredParticipantName(result.participantId) || "Player";
+      const { error: pErr } = await supabase
+        .from("participants")
+        .upsert([{ id: result.participantId, name }], { onConflict: "id" });
+
+      if (!pErr) {
+        const { error: retryErr } = await supabase
+          .from("game_results")
+          .insert(payload);
+
+        if (!retryErr) {
+          return "success";
+        }
+      }
+    } catch {
+      // ignore retry errors
+    }
+  }
+
+  console.warn(`[DoodleBot] game_results INSERT rejected (HTTP ${status}):`, error?.message || error);
   return "db-error";
 }
+
 
 // ---------------------------------------------------------------------------
 // localStorage queue — read / write
