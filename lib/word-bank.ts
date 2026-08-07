@@ -64,10 +64,16 @@ export const WORD_BANK: Word[] = [
   { id: "drums", labels: ["drums"], difficulty: "hard" },
 ];
 
-/** Picks 3 distinct random words from the bank. */
+/** Picks 3 distinct random words from the bank using a Fisher-Yates shuffle. */
 export function pickThree(): Word[] {
-  const shuffled = [...WORD_BANK].sort(() => 0.5 - Math.random());
-  return shuffled.slice(0, 3);
+  // array.sort(() => 0.5 - Math.random()) is a known-biased shuffle (issue #42).
+  // Fisher-Yates gives a uniform distribution in O(n) time.
+  const arr = [...WORD_BANK];
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr.slice(0, 3);
 }
 
 /** @deprecated Use {@link pickThree}. Kept as an alias so existing call sites don't break. */

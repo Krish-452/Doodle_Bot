@@ -17,6 +17,11 @@ interface DrawingCanvasProps {
   onClear?: () => void;
 }
 
+// The model was trained on monochrome Quick, Draw! bitmaps. The preprocessing pipeline
+// (grayscale → invert → gamma boost in lib/model.ts) likely handles most colours fine, but
+// very light colours (e.g. near-white custom picks) could produce low ink-density inputs the
+// model has never seen. Worth testing a few non-black colours during #34's validation pass.
+// (issue #42)
 const PRESET_COLORS = [
   "#0A0A0A", // Black
   "#00629B", // IEEE Blue

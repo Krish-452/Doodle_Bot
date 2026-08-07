@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import path from "path";
 
 const nextConfig: NextConfig = {
   // public/model/ (issue #18) is the largest asset in the app and every participant downloads
@@ -17,6 +18,11 @@ const nextConfig: NextConfig = {
         ],
       },
     ];
+  },
+  // Silences the build warning about a package-lock.json in C:\Users\ADMIN being ignored.
+  // Requires an absolute path (issue #42).
+  turbopack: {
+    root: path.resolve(__dirname),
   },
 };
 
