@@ -136,6 +136,14 @@ def _min_filter_3x3(img: np.ndarray) -> np.ndarray:
 # ---------------------------------------------------------------------------
 
 def build_model(augment: keras.Sequential) -> keras.Model:
+    # GlobalAveragePooling2D previously sat here and collapsed the 7x7x64 feature map to just
+    # 64 values, throwing away nearly all spatial layout - two independent training runs
+    # plateaued at 83.9% and 87.6% val accuracy, both well under #19's 94.5% shipped baseline.
+    # The shipped model instead pools down to 3x3x64 and Flattens (576 features) into a 128-unit
+    # dense head, keeping spatial detail GAP discards. Mirrored that here (with one extra
+    # MaxPooling2D to keep the Flatten -> Dense input small enough for the size budget) rather
+    # than reverting the deeper conv stack or the augmentation, which were the issue's actual
+    # asks.
     inputs = keras.Input(shape=(IMG_SIZE, IMG_SIZE, 1))
     x = augment(inputs)
     x = layers.Conv2D(24, 3, activation="relu", padding="same")(x)
@@ -144,8 +152,9 @@ def build_model(augment: keras.Sequential) -> keras.Model:
     x = layers.Conv2D(48, 3, activation="relu", padding="same")(x)
     x = layers.MaxPooling2D()(x)
     x = layers.Conv2D(64, 3, activation="relu", padding="same")(x)
-    x = layers.GlobalAveragePooling2D()(x)
-    x = layers.Dense(64, activation="relu")(x)
+    x = layers.MaxPooling2D()(x)
+    x = layers.Flatten()(x)
+    x = layers.Dense(128, activation="relu")(x)
     x = layers.Dropout(0.3)(x)
     outputs = layers.Dense(len(CLASSES), activation="softmax")(x)
     return keras.Model(inputs, outputs)
@@ -160,11 +169,26 @@ def per_class_accuracy(model, x_val, y_val):
     return table
 
 
+class _EpochMarker(keras.callbacks.Callback):
+    """Writes the last-completed epoch number to disk so a killed run can resume from here
+    instead of restarting - this training environment has been killing the process mid-run
+    (observed twice: once at epoch 1, once at epoch 32) for reasons outside the script, so
+    losing 30+ epochs of progress to a restart is a real cost, not a hypothetical one."""
+
+    def __init__(self, path):
+        super().__init__()
+        self.path = path
+
+    def on_epoch_end(self, epoch, logs=None):
+        with open(self.path, "w") as f:
+            f.write(str(epoch + 1))  # epoch is 0-indexed; store count of epochs completed
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", default="data")
     parser.add_argument("--out", default="../public/model")
-    parser.add_argument("--epochs", type=int, default=15)
+    parser.add_argument("--epochs", type=int, default=60)
     parser.add_argument("--batch-size", type=int, default=128)
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
@@ -192,15 +216,46 @@ def main():
     model.compile(optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"])
     model.summary()
 
+    os.makedirs(args.out, exist_ok=True)
+    ckpt_weights = os.path.join(args.out, "_candidate_checkpoint.weights.h5")
+    ckpt_epoch_marker = os.path.join(args.out, "_candidate_checkpoint.epoch")
+    initial_epoch = 0
+    if os.path.exists(ckpt_weights) and os.path.exists(ckpt_epoch_marker):
+        initial_epoch = int(open(ckpt_epoch_marker).read().strip())
+        model.load_weights(ckpt_weights)
+        print(f"Resuming from checkpoint at epoch {initial_epoch} ({ckpt_weights})")
+
+    # Augmentation makes each epoch a harder task than #19's unaugmented baseline, so a flat
+    # 15-epoch schedule (the original default) undertrained the model - a prior candidate run
+    # validated at 83.9%, well below the 94.5% shipped baseline it was supposed to beat. Give it
+    # more epoch budget but stop on a plateau (restoring the best-val-accuracy weights, not
+    # whatever the last epoch happened to land on) rather than hand-picking an epoch count.
+    callbacks = [
+        keras.callbacks.EarlyStopping(
+            monitor="val_accuracy", patience=10, restore_best_weights=True,
+        ),
+        keras.callbacks.ReduceLROnPlateau(
+            monitor="val_loss", factor=0.5, patience=4, min_lr=1e-5,
+        ),
+        keras.callbacks.ModelCheckpoint(ckpt_weights, save_weights_only=True, save_freq="epoch"),
+        _EpochMarker(ckpt_epoch_marker),
+    ]
+
     history = model.fit(
         x_train, y_train,
         validation_data=(x_val, y_val),
+        initial_epoch=initial_epoch,
         epochs=args.epochs,
         batch_size=args.batch_size,
+        callbacks=callbacks,
         verbose=2,
     )
 
-    val_acc = history.history["val_accuracy"][-1]
+    val_acc = max(history.history["val_accuracy"]) if history.history.get("val_accuracy") else None
+    # On a resumed run initial_epoch may already be past the plateau, in which case history is
+    # empty (EarlyStopping/fit does nothing) - fall back to re-evaluating the loaded weights.
+    if val_acc is None:
+        val_acc = model.evaluate(x_val, y_val, verbose=0)[1]
     print(f"\nFinal validation accuracy: {val_acc * 100:.1f}%")
 
     print("\nPer-class held-out accuracy (NOT the hand-drawn gate - see training/README.md):")
@@ -241,6 +296,12 @@ def main():
         )
     print(f"\nCandidate artifacts written to {tfjs_out}/ (NOT swapped into public/model/ yet).")
     print("Report written to _candidate_report.json.")
+
+    # Run completed end-to-end - clear the resume checkpoint so the next invocation starts a
+    # fresh run instead of silently resuming from this one's final epoch.
+    for p in (ckpt_weights, ckpt_epoch_marker):
+        if os.path.exists(p):
+            os.remove(p)
 
 
 if __name__ == "__main__":
